@@ -43,6 +43,42 @@ export default function ExportButton() {
     });
   }
 
+  /**
+   * 폴리곤 + 제목박스 + 워터마크의 합쳐진 bounding rect 계산 (target 요소 기준 상대좌표)
+   * → 캡처 영역을 폴리곤 영역에 타이트하게 맞춤
+   */
+  function calcCaptureRect(target, titleBar, watermark) {
+    const targetRect = target.getBoundingClientRect();
+    const polys = target.querySelectorAll('.leaflet-interactive');
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    polys.forEach((p) => {
+      const r = p.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) return;
+      minX = Math.min(minX, r.left);
+      minY = Math.min(minY, r.top);
+      maxX = Math.max(maxX, r.right);
+      maxY = Math.max(maxY, r.bottom);
+    });
+    if (minX === Infinity) return null; // 폴리곤 없음 → 전체 캡처
+
+    // 제목박스 + 워터마크 bounding 포함
+    const extras = [titleBar, watermark].filter(Boolean);
+    extras.forEach((el) => {
+      const r = el.getBoundingClientRect();
+      minX = Math.min(minX, r.left);
+      minY = Math.min(minY, r.top);
+      maxX = Math.max(maxX, r.right);
+      maxY = Math.max(maxY, r.bottom);
+    });
+
+    const pad = 12; // 외곽 여백
+    const x = Math.max(0, minX - targetRect.left - pad);
+    const y = Math.max(0, minY - targetRect.top - pad);
+    const right = Math.min(targetRect.width, maxX - targetRect.left + pad);
+    const bottom = Math.min(targetRect.height, maxY - targetRect.top + pad);
+    return { x, y, width: right - x, height: bottom - y };
+  }
+
   const onExport = async () => {
     if (busy) return;
     setBusy(true);
@@ -79,8 +115,13 @@ export default function ExportButton() {
       let regionLabel = '전국';
       if (selectedSgg && ct) {
         const sd = ct.sido.find((s) => s.code === selectedSido);
-        const sg = (ct.sgg[selectedSido] || []).find((s) => s.code === selectedSgg);
-        regionLabel = `${sd?.name || ''} ${sg?.name || ''}`.trim();
+        if (selectedSgg.startsWith('CITY_')) {
+          const city = (ct.merged_cities?.[selectedSido] || []).find((c) => c.virtual_code === selectedSgg);
+          regionLabel = `${sd?.name || ''} ${city?.name || ''} (전체)`.trim();
+        } else {
+          const sg = (ct.sgg[selectedSido] || []).find((s) => s.code === selectedSgg);
+          regionLabel = `${sd?.name || ''} ${sg?.name || ''}`.trim();
+        }
       } else if (selectedSido && ct) {
         const sd = ct.sido.find((s) => s.code === selectedSido);
         regionLabel = sd?.name || '';
@@ -93,14 +134,14 @@ export default function ExportButton() {
         titleBar.id = '__export_title__';
         titleBar.style.cssText = `
           position: absolute; top: 8px; left: 8px; z-index: 1000;
-          background: rgba(255,255,255,0.95); padding: 5px 10px 5px 10px;
+          background: rgba(255,255,255,0.95); padding: 2px 10px 5px 10px;
           border: 1px solid #cbd5e1; border-radius: 4px;
           font-family: 'Noto Sans KR', sans-serif; pointer-events: none;
           box-shadow: 0 1px 3px rgba(0,0,0,0.1);
           line-height: 1.2;
         `;
         titleBar.innerHTML = `
-          <div style="font-size:7px;color:#eef0f3;margin:0;padding:0;line-height:1;letter-spacing:0.02em">${_bm}</div>
+          <div style="font-size:7px;color:#f9f9f9;margin:0;padding:0;line-height:0.9;letter-spacing:0.02em;font-weight:300">${_bm}</div>
           <div style="font-size:13px;font-weight:bold;color:#1e293b;margin:0;padding:0;line-height:1.25">
             지역사회보장계획 수립을 위한 GIS분석
           </div>
@@ -129,14 +170,26 @@ export default function ExportButton() {
         await document.fonts.ready;
       }
 
+      // 캡처 직전 transform 변환
       restoredTransforms = unfreezeLeafletTransforms(target);
 
-      const canvas = await html2canvas(target, {
+      // 폴리곤 영역 기반 캡처 rect 계산 (분석 결과만 깔끔히 출력)
+      const captureRect = calcCaptureRect(target, titleBar, watermark);
+
+      const opts = {
         scale,
         useCORS: true,
         backgroundColor: cleanMode ? '#ffffff' : null,
         logging: false
-      });
+      };
+      if (captureRect) {
+        opts.x = captureRect.x;
+        opts.y = captureRect.y;
+        opts.width = captureRect.width;
+        opts.height = captureRect.height;
+      }
+
+      const canvas = await html2canvas(target, opts);
 
       const region = selectedSgg || selectedSido || 'all';
       const filename = `choropleth_${viewMode}_${region}_${todayStr}.png`;
