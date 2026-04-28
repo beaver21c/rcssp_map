@@ -16,13 +16,30 @@ function resolveDataUrl(viewMode, selectedSido) {
 
 function filterFeatures(features, viewMode, selectedSgg, mergedCity) {
   if (viewMode !== 'sgg_emd' || !selectedSgg) return features;
-  // 일반구 통합 모드: CITY_xx_yyy 가상코드
   if (selectedSgg.startsWith('CITY_')) {
     if (!mergedCity) return features;
     const allowedSet = new Set(mergedCity.sgg_codes);
     return features.filter((f) => allowedSet.has(f.properties?.sgg_cd));
   }
   return features.filter((f) => f.properties?.sgg_cd === selectedSgg);
+}
+
+/**
+ * leaflet map 인스턴스를 window에 노출 (PNG export 용)
+ * + 현재 표시 중인 GeoJSON layer 참조도 함께 노출
+ */
+function MapRefHolder({ data }) {
+  const map = useMap();
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.__leafletMap = map;
+    return () => { if (window.__leafletMap === map) window.__leafletMap = null; };
+  }, [map]);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.__leafletData = data;
+  }, [data]);
+  return null;
 }
 
 function FitBoundsOnData({ data, fitKey }) {
@@ -107,7 +124,6 @@ export default function MapView() {
   );
   const { data, loading, error } = useGeoData(url);
 
-  // 일반구 통합 시 가상 city 객체
   const mergedCity = useMemo(() => {
     if (!selectedSgg.startsWith('CITY_') || !codeTable) return null;
     const list = codeTable.merged_cities?.[selectedSido] || [];
@@ -182,6 +198,7 @@ export default function MapView() {
 
         {filtered && <FitBoundsOnData data={filtered} fitKey={layerKey} />}
         {filtered && <RegionLabels data={filtered} viewMode={viewMode} fitKey={layerKey} />}
+        <MapRefHolder data={filtered} />
       </MapContainer>
 
       <Legend />

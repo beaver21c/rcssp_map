@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import L from 'leaflet';
 import html2canvas from 'html2canvas';
 import { useStore } from '../store.js';
 import { loadDataVersion, loadCodeTable } from '../hooks/useGeoData.js';
@@ -10,81 +11,6 @@ export default function ExportButton() {
   const [scale, setScale] = useState(2);
   const [cleanMode, setCleanMode] = useState(true);
 
-  /**
-   * leaflet 라벨(divIcon marker) + 툴팁 + 팝업의 transform → top/left 변환
-   * - .leaflet-pane은 제외 (overlay-pane SVG 폴리곤 좌표 보호)
-   * - 라벨 div만 html2canvas 호환 좌표로 풀어냄
-   */
-  function unfreezeLeafletTransforms(rootEl) {
-    const restored = [];
-    const targets = rootEl.querySelectorAll(
-      '.leaflet-marker-icon, .leaflet-tooltip, .leaflet-popup'
-    );
-    targets.forEach((el) => {
-      const cs = window.getComputedStyle(el);
-      const transform = cs.transform;
-      if (!transform || transform === 'none') return;
-      const m = transform.match(/matrix(?:3d)?\(([^)]+)\)/);
-      if (!m) return;
-      const v = m[1].split(',').map((x) => parseFloat(x));
-      let tx = 0, ty = 0;
-      if (v.length === 6) { tx = v[4]; ty = v[5]; }
-      else if (v.length === 16) { tx = v[12]; ty = v[13]; }
-      else return;
-      restored.push({
-        el, oldTransform: el.style.transform,
-        oldLeft: el.style.left, oldTop: el.style.top
-      });
-      el.style.transform = 'none';
-      el.style.left = (parseFloat(el.style.left) || 0) + tx + 'px';
-      el.style.top = (parseFloat(el.style.top) || 0) + ty + 'px';
-    });
-    return restored;
-  }
-
-  function restoreLeafletTransforms(restored) {
-    restored.forEach(({ el, oldTransform, oldLeft, oldTop }) => {
-      el.style.transform = oldTransform;
-      el.style.left = oldLeft;
-      el.style.top = oldTop;
-    });
-  }
-
-  /**
-   * 폴리곤 + 제목박스 + 워터마크의 합쳐진 bounding rect 계산
-   * (target 요소 기준 상대좌표) - transform 변환 *전*에 호출 필수
-   */
-  function calcCaptureRect(target, titleBar, watermark) {
-    const targetRect = target.getBoundingClientRect();
-    const polys = target.querySelectorAll('.leaflet-interactive');
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    polys.forEach((p) => {
-      const r = p.getBoundingClientRect();
-      if (r.width === 0 || r.height === 0) return;
-      minX = Math.min(minX, r.left);
-      minY = Math.min(minY, r.top);
-      maxX = Math.max(maxX, r.right);
-      maxY = Math.max(maxY, r.bottom);
-    });
-    if (minX === Infinity) return null;
-
-    const extras = [titleBar, watermark].filter(Boolean);
-    extras.forEach((el) => {
-      const r = el.getBoundingClientRect();
-      minX = Math.min(minX, r.left);
-      minY = Math.min(minY, r.top);
-      maxX = Math.max(maxX, r.right);
-      maxY = Math.max(maxY, r.bottom);
-    });
-
-    const pad = 12;
-    const x = Math.max(0, minX - targetRect.left - pad);
-    const y = Math.max(0, minY - targetRect.top - pad);
-    const right = Math.min(targetRect.width, maxX - targetRect.left + pad);
-    const bottom = Math.min(targetRect.height, maxY - targetRect.top + pad);
-    return { x, y, width: right - x, height: bottom - y };
-  }
-
   const onExport = async () => {
     if (busy) return;
     setBusy(true);
@@ -92,7 +18,6 @@ export default function ExportButton() {
     let watermark = null;
     let titleBar = null;
     let hiddenTiles = [];
-    let restoredTransforms = [];
 
     try {
       const target = document.getElementById('map-export-area');
@@ -105,6 +30,26 @@ export default function ExportButton() {
         if (!confirm('입력된 값이 없습니다. 빈 지도를 그대로 다운로드하시겠습니까?')) {
           setBusy(false);
           return;
+        }
+      }
+
+      // 캡처 직전: 폴리곤 영역에 fitBounds → 화면 가득 채워 빈 공간 최소화
+      const map = window.__leafletMap;
+      const data = window.__leafletData;
+      if (map && data && data.features?.length) {
+        try {
+          const layer = L.geoJSON(data);
+          const bounds = layer.getBounds();
+          if (bounds.isValid()) {
+            map.fitBounds(bounds, {
+              padding: [60, 60],
+              animate: false
+            });
+            // 렌더링 안정화 대기
+            await new Promise((r) => setTimeout(r, 350));
+          }
+        } catch (e) {
+          console.warn('[Export] fitBounds 실패:', e);
         }
       }
 
@@ -176,26 +121,13 @@ export default function ExportButton() {
         await document.fonts.ready;
       }
 
-      // 1단계: 캡처 영역 계산 (transform 변환 *전* 정상 좌표 기준)
-      const captureRect = calcCaptureRect(target, titleBar, watermark);
-
-      // 2단계: 라벨만 transform 변환 (overlay-pane SVG 폴리곤은 보호)
-      restoredTransforms = unfreezeLeafletTransforms(target);
-
-      const opts = {
+      // 캡처: transform 변환·영역 자르기 모두 제거 → 화면 그대로 캡처
+      const canvas = await html2canvas(target, {
         scale,
         useCORS: true,
         backgroundColor: cleanMode ? '#ffffff' : null,
         logging: false
-      };
-      if (captureRect) {
-        opts.x = captureRect.x;
-        opts.y = captureRect.y;
-        opts.width = captureRect.width;
-        opts.height = captureRect.height;
-      }
-
-      const canvas = await html2canvas(target, opts);
+      });
 
       const region = selectedSgg || selectedSido || 'all';
       const filename = `choropleth_${viewMode}_${region}_${todayStr}.png`;
@@ -215,7 +147,6 @@ export default function ExportButton() {
       console.error('[ExportButton] PNG 생성 실패:', err);
       alert('PNG 생성 실패: ' + err.message);
     } finally {
-      if (restoredTransforms.length > 0) restoreLeafletTransforms(restoredTransforms);
       if (titleBar?.parentNode) titleBar.parentNode.removeChild(titleBar);
       if (watermark?.parentNode) watermark.parentNode.removeChild(watermark);
       hiddenTiles.forEach(({ el, prev }) => { el.style.display = prev || ''; });
