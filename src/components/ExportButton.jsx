@@ -2,23 +2,14 @@ import { useState } from 'react';
 import html2canvas from 'html2canvas';
 import { useStore } from '../store.js';
 import { loadDataVersion, loadCodeTable } from '../hooks/useGeoData.js';
+import { _bm } from '../utils/_meta.js';
 
-/**
- * PNG 내보내기 버튼
- * - 클린 모드: OSM 타일 제거 + 폴리곤+범례+제목+워터마크만 출력
- * - leaflet pane transform → top/left 변환 (html2canvas 좌표 어긋남 회피)
- */
 export default function ExportButton() {
   const { viewMode, selectedSido, selectedSgg, values } = useStore();
   const [busy, setBusy] = useState(false);
   const [scale, setScale] = useState(2);
   const [cleanMode, setCleanMode] = useState(true);
 
-  /**
-   * leaflet의 모든 pane은 transform: translate3d(...)로 위치 결정.
-   * html2canvas가 이를 누적 처리할 때 좌표 어긋남 → 라벨이 화면 밖으로 분리.
-   * 해결: 캡처 직전 transform → left/top CSS로 변환, 캡처 후 원상복구.
-   */
   function unfreezeLeafletTransforms(rootEl) {
     const restored = [];
     const panes = rootEl.querySelectorAll('.leaflet-pane, .leaflet-marker-icon, .leaflet-tooltip, .leaflet-popup');
@@ -30,16 +21,12 @@ export default function ExportButton() {
       if (!m) return;
       const v = m[1].split(',').map((x) => parseFloat(x));
       let tx = 0, ty = 0;
-      if (v.length === 6) {
-        tx = v[4]; ty = v[5];
-      } else if (v.length === 16) {
-        tx = v[12]; ty = v[13];
-      } else return;
+      if (v.length === 6) { tx = v[4]; ty = v[5]; }
+      else if (v.length === 16) { tx = v[12]; ty = v[13]; }
+      else return;
       restored.push({
-        el,
-        oldTransform: el.style.transform,
-        oldLeft: el.style.left,
-        oldTop: el.style.top
+        el, oldTransform: el.style.transform,
+        oldLeft: el.style.left, oldTop: el.style.top
       });
       el.style.transform = 'none';
       el.style.left = (parseFloat(el.style.left) || 0) + tx + 'px';
@@ -79,7 +66,6 @@ export default function ExportButton() {
         }
       }
 
-      // 클린 모드: OSM 타일 일시 숨김
       if (cleanMode) {
         const tilePane = target.querySelector('.leaflet-tile-pane');
         if (tilePane) {
@@ -88,7 +74,6 @@ export default function ExportButton() {
         }
       }
 
-      // 메타 정보 + 제목 박스
       const ver = await loadDataVersion().catch(() => null);
       const ct = await loadCodeTable().catch(() => null);
       let regionLabel = '전국';
@@ -108,16 +93,18 @@ export default function ExportButton() {
         titleBar.id = '__export_title__';
         titleBar.style.cssText = `
           position: absolute; top: 8px; left: 8px; z-index: 1000;
-          background: rgba(255,255,255,0.95); padding: 8px 12px;
+          background: rgba(255,255,255,0.95); padding: 5px 10px 5px 10px;
           border: 1px solid #cbd5e1; border-radius: 4px;
           font-family: 'Noto Sans KR', sans-serif; pointer-events: none;
           box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+          line-height: 1.2;
         `;
         titleBar.innerHTML = `
-          <div style="font-size:13px;font-weight:bold;color:#1e293b;margin-bottom:2px">
+          <div style="font-size:7px;color:#eef0f3;margin:0;padding:0;line-height:1;letter-spacing:0.02em">${_bm}</div>
+          <div style="font-size:13px;font-weight:bold;color:#1e293b;margin:0;padding:0;line-height:1.25">
             지역사회보장계획 수립을 위한 GIS분석
           </div>
-          <div style="font-size:11px;color:#475569">
+          <div style="font-size:11px;color:#475569;margin:0;padding:0;line-height:1.2">
             ${regionLabel} · ${modeLabel} · ${todayStr}
           </div>
         `;
@@ -142,7 +129,6 @@ export default function ExportButton() {
         await document.fonts.ready;
       }
 
-      // 핵심 수정: leaflet transform 변환
       restoredTransforms = unfreezeLeafletTransforms(target);
 
       const canvas = await html2canvas(target, {
@@ -170,9 +156,7 @@ export default function ExportButton() {
       console.error('[ExportButton] PNG 생성 실패:', err);
       alert('PNG 생성 실패: ' + err.message);
     } finally {
-      // transform 원상복구 (가장 먼저)
       if (restoredTransforms.length > 0) restoreLeafletTransforms(restoredTransforms);
-      // 임시 DOM 제거
       if (titleBar?.parentNode) titleBar.parentNode.removeChild(titleBar);
       if (watermark?.parentNode) watermark.parentNode.removeChild(watermark);
       hiddenTiles.forEach(({ el, prev }) => { el.style.display = prev || ''; });

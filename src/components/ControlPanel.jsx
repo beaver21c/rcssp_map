@@ -4,6 +4,7 @@ import { loadCodeTable } from '../hooks/useGeoData.js';
 import DirectInput from './DirectInput.jsx';
 import ExcelUpload from './ExcelUpload.jsx';
 import ColorSettings from './ColorSettings.jsx';
+import { _bm } from '../utils/_meta.js';
 
 const VIEW_MODES = [
   { id: 'sgg', label: '전국 → 시군구 비교' },
@@ -30,7 +31,6 @@ export default function ControlPanel() {
     return <div className="p-4 text-sm text-slate-500">코드 테이블 로딩 중...</div>;
   }
 
-  // 일반구 보유 시 (가상 통합) + 일반 시군구
   const sggList = selectedSido ? codeTable.sgg[selectedSido] || [] : [];
   const mergedCities = selectedSido ? codeTable.merged_cities?.[selectedSido] || [] : [];
 
@@ -137,6 +137,24 @@ export default function ControlPanel() {
         <h2 className="text-sm font-bold text-slate-700 mb-2">③ 색상 설정</h2>
         <ColorSettings />
       </section>
+
+      <div style={{ flex: 1 }} aria-hidden="true" />
+      <div
+        aria-hidden="true"
+        style={{
+          fontSize: '8px',
+          color: '#eef0f3',
+          letterSpacing: '0.02em',
+          userSelect: 'none',
+          textAlign: 'left',
+          paddingLeft: '2px',
+          marginTop: '4px',
+          fontWeight: 300,
+          lineHeight: '1'
+        }}
+      >
+        {_bm}
+      </div>
     </div>
   );
 }
