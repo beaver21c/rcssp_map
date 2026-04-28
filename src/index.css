@@ -1,0 +1,57 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  font-family: 'Noto Sans KR', 'Malgun Gothic', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  background: #f8fafc;
+}
+
+/* Leaflet 컨테이너 */
+.leaflet-container {
+  background: #f1f5f9;
+  font-family: inherit;
+}
+
+/* 지역명 라벨 (소형 회색 텍스트) */
+.region-label {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  font-size: 10px;
+  color: #6b7280;
+  font-weight: 400;
+  text-shadow: 1px 1px 0 #fff, -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff;
+  pointer-events: none;
+  white-space: nowrap;
+  padding: 0 !important;
+}
+
+.leaflet-interactive:hover { filter: brightness(1.05); }
+
+/* 스크롤바 */
+.scroll-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+.scroll-thin::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+.scroll-thin::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+/* 모바일 (<= 767px) */
+@media (max-width: 767px) {
+  .leaflet-control-zoom {
+    margin-right: 8px !important;
+    margin-top: 8px !important;
+  }
+  .region-label {
+    font-size: 9px;
+  }
+}
+
+/* 태블릿 (768~1023px) */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .region-label {
+    font-size: 9px;
+  }
+}

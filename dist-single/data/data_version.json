@@ -1,0 +1,15 @@
+{
+  "source": "vuski/admdongkor",
+  "source_url": "https://github.com/vuski/admdongkor",
+  "source_version": "ver20260401",
+  "source_commit": "e24f80c67e1fd87fb124afe2e5532f7b1bb5b0d1",
+  "source_commit_date": "2026-04-23",
+  "admin_boundary_base": "2026-04-01",
+  "extracted_date": "2026-04-28",
+  "converted_by": "mapshaper 0.7.3",
+  "simplify_pct": "12%",
+  "code_system": "통계청 8자리 한국행정구역분류코드 (adm_cd)",
+  "feature_counts": { "sido": 17, "sgg": 255, "emd": 3558 },
+  "license": "자유 이용 (출처 표기)",
+  "attribution": "본 서비스는 vuski/admdongkor 저장소가 공개·관리하는 행정동 경계 데이터를 활용함."
+}
