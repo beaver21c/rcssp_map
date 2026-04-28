@@ -10,10 +10,17 @@ export default function ExportButton() {
   const [scale, setScale] = useState(2);
   const [cleanMode, setCleanMode] = useState(true);
 
+  /**
+   * leaflet 라벨(divIcon marker) + 툴팁 + 팝업의 transform → top/left 변환
+   * - .leaflet-pane은 제외 (overlay-pane SVG 폴리곤 좌표 보호)
+   * - 라벨 div만 html2canvas 호환 좌표로 풀어냄
+   */
   function unfreezeLeafletTransforms(rootEl) {
     const restored = [];
-    const panes = rootEl.querySelectorAll('.leaflet-pane, .leaflet-marker-icon, .leaflet-tooltip, .leaflet-popup');
-    panes.forEach((el) => {
+    const targets = rootEl.querySelectorAll(
+      '.leaflet-marker-icon, .leaflet-tooltip, .leaflet-popup'
+    );
+    targets.forEach((el) => {
       const cs = window.getComputedStyle(el);
       const transform = cs.transform;
       if (!transform || transform === 'none') return;
@@ -44,8 +51,8 @@ export default function ExportButton() {
   }
 
   /**
-   * 폴리곤 + 제목박스 + 워터마크의 합쳐진 bounding rect 계산 (target 요소 기준 상대좌표)
-   * → 캡처 영역을 폴리곤 영역에 타이트하게 맞춤
+   * 폴리곤 + 제목박스 + 워터마크의 합쳐진 bounding rect 계산
+   * (target 요소 기준 상대좌표) - transform 변환 *전*에 호출 필수
    */
   function calcCaptureRect(target, titleBar, watermark) {
     const targetRect = target.getBoundingClientRect();
@@ -59,9 +66,8 @@ export default function ExportButton() {
       maxX = Math.max(maxX, r.right);
       maxY = Math.max(maxY, r.bottom);
     });
-    if (minX === Infinity) return null; // 폴리곤 없음 → 전체 캡처
+    if (minX === Infinity) return null;
 
-    // 제목박스 + 워터마크 bounding 포함
     const extras = [titleBar, watermark].filter(Boolean);
     extras.forEach((el) => {
       const r = el.getBoundingClientRect();
@@ -71,7 +77,7 @@ export default function ExportButton() {
       maxY = Math.max(maxY, r.bottom);
     });
 
-    const pad = 12; // 외곽 여백
+    const pad = 12;
     const x = Math.max(0, minX - targetRect.left - pad);
     const y = Math.max(0, minY - targetRect.top - pad);
     const right = Math.min(targetRect.width, maxX - targetRect.left + pad);
@@ -170,11 +176,11 @@ export default function ExportButton() {
         await document.fonts.ready;
       }
 
-      // 캡처 직전 transform 변환
-      restoredTransforms = unfreezeLeafletTransforms(target);
-
-      // 폴리곤 영역 기반 캡처 rect 계산 (분석 결과만 깔끔히 출력)
+      // 1단계: 캡처 영역 계산 (transform 변환 *전* 정상 좌표 기준)
       const captureRect = calcCaptureRect(target, titleBar, watermark);
+
+      // 2단계: 라벨만 transform 변환 (overlay-pane SVG 폴리곤은 보호)
+      restoredTransforms = unfreezeLeafletTransforms(target);
 
       const opts = {
         scale,

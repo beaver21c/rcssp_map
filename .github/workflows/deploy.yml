@@ -33,9 +33,13 @@ jobs:
       - name: GitHub Pages용 빌드
         run: npm run build:gh
 
-      - name: Pages 산출물 업로드
+      - name: Pages 자동 활성화 + 설정
         uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+        with:
+          enablement: true  # Settings 수동 활성화 없이 자동 ON (T-4 회피)
+
+      - name: Pages 산출물 업로드
+        uses: actions/upload-pages-artifact@v3
         with:
           path: ./dist
 
