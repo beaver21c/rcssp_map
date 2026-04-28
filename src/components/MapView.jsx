@@ -1,7 +1,7 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { MapContainer, TileLayer, GeoJSON, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import { useGeoData } from '../hooks/useGeoData.js';
+import { useGeoData, loadCodeTable } from '../hooks/useGeoData.js';
 import { useColorScale } from '../hooks/useColorScale.js';
 import { baseStyle, hoverStyle, extractCode, extractName } from '../utils/mapStyles.js';
 import { useStore } from '../store.js';
@@ -14,8 +14,14 @@ function resolveDataUrl(viewMode, selectedSido) {
   return null;
 }
 
-function filterFeatures(features, viewMode, selectedSgg) {
+function filterFeatures(features, viewMode, selectedSgg, mergedCity) {
   if (viewMode !== 'sgg_emd' || !selectedSgg) return features;
+  // 일반구 통합 모드: CITY_xx_yyy 가상코드
+  if (selectedSgg.startsWith('CITY_')) {
+    if (!mergedCity) return features;
+    const allowedSet = new Set(mergedCity.sgg_codes);
+    return features.filter((f) => allowedSet.has(f.properties?.sgg_cd));
+  }
   return features.filter((f) => f.properties?.sgg_cd === selectedSgg);
 }
 
@@ -89,6 +95,11 @@ export default function MapView() {
     classification,
     classCount
   } = useStore();
+  const [codeTable, setCodeTable] = useState(null);
+
+  useEffect(() => {
+    loadCodeTable().then(setCodeTable).catch((e) => console.error(e));
+  }, []);
 
   const url = useMemo(
     () => resolveDataUrl(viewMode, selectedSido),
@@ -96,13 +107,20 @@ export default function MapView() {
   );
   const { data, loading, error } = useGeoData(url);
 
+  // 일반구 통합 시 가상 city 객체
+  const mergedCity = useMemo(() => {
+    if (!selectedSgg.startsWith('CITY_') || !codeTable) return null;
+    const list = codeTable.merged_cities?.[selectedSido] || [];
+    return list.find((c) => c.virtual_code === selectedSgg) || null;
+  }, [selectedSgg, selectedSido, codeTable]);
+
   const filtered = useMemo(() => {
     if (!data) return null;
     return {
       ...data,
-      features: filterFeatures(data.features, viewMode, selectedSgg)
+      features: filterFeatures(data.features, viewMode, selectedSgg, mergedCity)
     };
-  }, [data, viewMode, selectedSgg]);
+  }, [data, viewMode, selectedSgg, mergedCity]);
 
   const { getColor } = useColorScale(values, paletteName, classification, classCount);
 

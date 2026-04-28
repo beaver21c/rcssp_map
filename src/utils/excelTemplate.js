@@ -1,9 +1,6 @@
 import * as XLSX from 'xlsx';
 import { getTargetCodes } from './codeTable.js';
 
-/**
- * 사용방법 시트 행 생성
- */
 function buildGuideRows(viewMode, totalCount) {
   const modeLabel = {
     sgg: '전국 → 시군구 비교',
@@ -43,15 +40,16 @@ function buildGuideRows(viewMode, totalCount) {
     ['2. 잘못된 양식 업로드 → 화면 알림 확인.'],
     ['3. 매칭 실패율 50%↑ → 양식 재다운로드 권장.'],
     [''],
+    ['【일반구 통합 안내】'],
+    ['용인시·성남시·수원시 등 일반구 보유 시는 시군구 드롭다운에서'],
+    ['"○○시 (전체 N개 구)" 옵션 선택 시 모든 일반구 읍면동을 한번에 출력함.'],
+    [''],
     [''],
     [`총 ${totalCount}개 지역 (${new Date().toISOString().slice(0,10)} 기준)`],
     ['데이터 출처: vuski/admdongkor · 한국보건사회연구원 제공']
   ];
 }
 
-/**
- * 보기 모드별 엑셀 양식 다운로드
- */
 export function downloadTemplate(codeTable, viewMode, selectedSido, selectedSgg) {
   const targets = getTargetCodes(codeTable, viewMode, selectedSido, selectedSgg);
   if (targets.length === 0) {
@@ -80,16 +78,28 @@ export function downloadTemplate(codeTable, viewMode, selectedSido, selectedSgg)
   } else if (viewMode === 'sgg_emd') {
     header = ['지역코드', '시도', '시군구', '읍면동', '값'];
     const sd = codeTable.sido.find((s) => s.code === selectedSido);
-    const sgg = (codeTable.sgg[selectedSido] || []).find((s) => s.code === selectedSgg);
-    for (const emd of codeTable.emd[selectedSgg] || []) {
-      rows.push([emd.code, sd?.name || '', sgg?.name || '', emd.name, '']);
+    // 일반구 통합 가상 코드
+    if (selectedSgg.startsWith('CITY_')) {
+      const list = codeTable.merged_cities?.[selectedSido] || [];
+      const city = list.find((c) => c.virtual_code === selectedSgg);
+      if (city) {
+        for (const sgg_cd of city.sgg_codes) {
+          const sggInfo = (codeTable.sgg[selectedSido] || []).find((s) => s.code === sgg_cd);
+          for (const emd of codeTable.emd[sgg_cd] || []) {
+            rows.push([emd.code, sd?.name || '', sggInfo?.name || '', emd.name, '']);
+          }
+        }
+      }
+    } else {
+      const sgg = (codeTable.sgg[selectedSido] || []).find((s) => s.code === selectedSgg);
+      for (const emd of codeTable.emd[selectedSgg] || []) {
+        rows.push([emd.code, sd?.name || '', sgg?.name || '', emd.name, '']);
+      }
     }
   }
 
-  // 입력양식 시트
   const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
   ws['!cols'] = header.map(() => ({ wch: 16 }));
-  // 지역코드 컬럼 텍스트 형식 (앞 0 보존)
   for (let i = 1; i <= rows.length; i++) {
     const cellRef = XLSX.utils.encode_cell({ c: 0, r: i });
     if (ws[cellRef]) {
@@ -98,26 +108,24 @@ export function downloadTemplate(codeTable, viewMode, selectedSido, selectedSgg)
     }
   }
 
-  // 사용방법 시트
   const guideRows = buildGuideRows(viewMode, rows.length);
   const wsGuide = XLSX.utils.aoa_to_sheet(guideRows);
   wsGuide['!cols'] = [{ wch: 70 }];
 
-  // workbook 조립 (사용방법을 두번째 시트로 추가, 입력양식이 첫번째)
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, '입력양식');
   XLSX.utils.book_append_sheet(wb, wsGuide, '사용방법');
 
-  const filename = `template_${viewMode}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+  // 파일명에 city 가상코드 처리
+  const sggLabel = selectedSgg.startsWith('CITY_')
+    ? selectedSgg.replace('CITY_', 'city_')
+    : selectedSgg || '';
+  const filename = `template_${viewMode}_${sggLabel || selectedSido || 'all'}_${new Date().toISOString().slice(0, 10)}.xlsx`;
   XLSX.writeFile(wb, filename);
 }
 
-/**
- * 업로드된 xlsx 파일 파싱 + 코드 매칭 (강건성 강화)
- */
 export function parseExcel(file, codeTable) {
   return new Promise((resolve, reject) => {
-    // 파일 확장자 검증
     const name = (file.name || '').toLowerCase();
     if (!name.endsWith('.xlsx') && !name.endsWith('.xls')) {
       reject(new Error('xlsx 또는 xls 파일만 지원함'));
@@ -137,7 +145,6 @@ export function parseExcel(file, codeTable) {
           reject(new Error('시트가 없는 빈 파일'));
           return;
         }
-        // "입력양식" 시트 우선, 없으면 첫 시트
         const sheetName = wb.SheetNames.includes('입력양식')
           ? '입력양식'
           : wb.SheetNames[0];
@@ -165,7 +172,6 @@ export function parseExcel(file, codeTable) {
         const matched = {};
         const failed = [];
 
-        // 인덱스 구축
         const allCodes = new Set();
         codeTable.sido.forEach((s) => allCodes.add(s.code));
         Object.values(codeTable.sgg).flat().forEach((s) => allCodes.add(s.code));
@@ -184,11 +190,10 @@ export function parseExcel(file, codeTable) {
           if (!rawCode) continue;
           if (rawVal === '' || rawVal === null || rawVal === undefined) continue;
 
-          // 앞 0 손실 보정 (5자리 또는 8자리로 패딩)
           if (/^\d+$/.test(rawCode)) {
-            if (rawCode.length === 4) rawCode = '0' + rawCode;       // 5자리 sgg
-            else if (rawCode.length === 7) rawCode = '0' + rawCode;  // 8자리 emd
-            else if (rawCode.length === 9) rawCode = '0' + rawCode;  // 10자리 adm_cd2
+            if (rawCode.length === 4) rawCode = '0' + rawCode;
+            else if (rawCode.length === 7) rawCode = '0' + rawCode;
+            else if (rawCode.length === 9) rawCode = '0' + rawCode;
           }
 
           const v = Number(rawVal);
@@ -198,17 +203,11 @@ export function parseExcel(file, codeTable) {
           }
 
           let matchCode = null;
-          if (allCodes.has(rawCode)) {
-            matchCode = rawCode;
-          } else if (adm2to1.has(rawCode)) {
-            matchCode = adm2to1.get(rawCode);
-          }
+          if (allCodes.has(rawCode)) matchCode = rawCode;
+          else if (adm2to1.has(rawCode)) matchCode = adm2to1.get(rawCode);
 
-          if (matchCode) {
-            matched[matchCode] = v;
-          } else {
-            failed.push({ row: i + 1, code: rawCode, reason: '코드 미매칭' });
-          }
+          if (matchCode) matched[matchCode] = v;
+          else failed.push({ row: i + 1, code: rawCode, reason: '코드 미매칭' });
         }
 
         if (Object.keys(matched).length === 0) {

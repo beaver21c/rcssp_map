@@ -30,7 +30,9 @@ export default function ControlPanel() {
     return <div className="p-4 text-sm text-slate-500">코드 테이블 로딩 중...</div>;
   }
 
+  // 일반구 보유 시 (가상 통합) + 일반 시군구
   const sggList = selectedSido ? codeTable.sgg[selectedSido] || [] : [];
+  const mergedCities = selectedSido ? codeTable.merged_cities?.[selectedSido] || [] : [];
 
   return (
     <div className="flex flex-col gap-4 p-4 overflow-y-auto scroll-thin h-full">
@@ -86,12 +88,28 @@ export default function ControlPanel() {
             className="w-full px-3 py-2 rounded border border-slate-300 bg-white text-sm"
           >
             <option value="">— 선택하시오 —</option>
-            {sggList.map((s) => (
-              <option key={s.code} value={s.code}>
-                {s.name}
-              </option>
-            ))}
+            {mergedCities.length > 0 && (
+              <optgroup label="일반구 통합 (시 단위)">
+                {mergedCities.map((c) => (
+                  <option key={c.virtual_code} value={c.virtual_code}>
+                    {c.name} (전체 {c.sgg_codes.length}개 구)
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            <optgroup label={mergedCities.length > 0 ? '시군구 (개별)' : '시군구'}>
+              {sggList.map((s) => (
+                <option key={s.code} value={s.code}>
+                  {s.name}
+                </option>
+              ))}
+            </optgroup>
           </select>
+          {selectedSgg.startsWith('CITY_') && (
+            <p className="text-[11px] text-amber-700 mt-1">
+              ⓘ 일반구 통합 모드. {mergedCities.find(c => c.virtual_code === selectedSgg)?.sgg_codes.length}개 구의 모든 읍면동 표시
+            </p>
+          )}
         </section>
       )}
 
