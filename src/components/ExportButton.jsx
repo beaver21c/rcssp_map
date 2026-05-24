@@ -4,12 +4,18 @@ import { useStore } from '../store.js';
 import { useColorScale } from '../hooks/useColorScale.js';
 import { loadDataVersion, loadCodeTable } from '../hooks/useGeoData.js';
 import { extractCode, extractName } from '../utils/mapStyles.js';
+import { filterInstitutions } from '../utils/geoUtils.js';
 import { _bm } from '../utils/_meta.js';
 
 const MISSING_FILL = '#e2e8f0'; // 미입력 회색
+const INST_COLOR = '#374151';   // 기관 ✕ 색
 
 export default function ExportButton() {
-  const { viewMode, selectedSido, selectedSgg, values, paletteName, classification, classCount } = useStore();
+  const {
+    viewMode, selectedSido, selectedSgg, values,
+    paletteName, classification, classCount,
+    institutions, showInstLabels
+  } = useStore();
   const { getColor, breaks, colors } = useColorScale(values, paletteName, classification, classCount);
   const [busy, setBusy] = useState(false);
   const [scale, setScale] = useState(2);
@@ -22,7 +28,6 @@ export default function ExportButton() {
     return v.toFixed(2);
   };
 
-  // roundRect 폴리필 (구형 대비)
   function roundRect(ctx, x, y, w, h, r) {
     if (typeof ctx.roundRect === 'function') { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); return; }
     ctx.beginPath();
@@ -34,7 +39,6 @@ export default function ExportButton() {
     ctx.closePath();
   }
 
-  // GeoJSON 한 폴리곤(고리 집합)을 path로 그려 채우고 테두리
   function paintRings(ctx, rings, map, s, fillColor) {
     ctx.beginPath();
     for (const ring of rings) {
@@ -83,6 +87,31 @@ export default function ExportButton() {
         ctx.fillStyle = '#6b7280';
         ctx.fillText(name, x, y);
       } catch (e) { /* skip */ }
+    }
+  }
+
+  // 기관 ✕ (+ 선택적 기관명) — 폴리곤과 동일 투영
+  function drawInstitutions(ctx, valid, map, s, showLabels) {
+    const xFont = `bold ${Math.round(13 * s)}px sans-serif`;
+    const nFont = `${Math.round(10 * s)}px "Noto Sans KR", sans-serif`;
+    for (const it of valid) {
+      const p = map.latLngToContainerPoint(L.latLng(it.lat, it.lng));
+      const x = p.x * s, y = p.y * s;
+      ctx.font = xFont; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.lineWidth = Math.max(2, Math.round(3 * s)); ctx.lineJoin = 'round';
+      ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+      ctx.strokeText('✕', x, y);
+      ctx.fillStyle = INST_COLOR;
+      ctx.fillText('✕', x, y);
+      if (showLabels && it.name) {
+        ctx.font = nFont; ctx.textBaseline = 'top';
+        const ny = y + 8 * s;
+        ctx.lineWidth = Math.max(2, Math.round(3 * s));
+        ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+        ctx.strokeText(it.name, x, ny);
+        ctx.fillStyle = INST_COLOR;
+        ctx.fillText(it.name, x, ny);
+      }
     }
   }
 
@@ -137,13 +166,18 @@ export default function ExportButton() {
     ctx.fillText(txt, bx + padX, by - padY);
   }
 
-  function drawLegend(ctx, s, W, H) {
-    if (!breaks.length || !colors.length) return;
+  function drawLegend(ctx, s, W, H, hasInst) {
+    const rows = [];
+    if (breaks.length && colors.length) {
+      colors.forEach((c, i) => rows.push({ kind: 'swatch', c, t: `${fmt(breaks[i])} ~ ${fmt(breaks[i + 1])}` }));
+      rows.push({ kind: 'swatch', c: MISSING_FILL, t: '미입력', sep: true });
+    }
+    if (hasInst) rows.push({ kind: 'mark', t: '기관위치', sep: rows.length > 0 });
+    if (!rows.length) return;
+
     const pad = 10 * s, sw = 20 * s, sh = 14 * s, rowGap = 3 * s, lineH = 16 * s;
     const fTitle = `bold ${Math.round(12 * s)}px "Noto Sans KR", sans-serif`;
     const fRow = `${Math.round(11 * s)}px "Noto Sans KR", sans-serif`;
-    const rows = colors.map((c, i) => ({ c, t: `${fmt(breaks[i])} ~ ${fmt(breaks[i + 1])}` }));
-    rows.push({ c: MISSING_FILL, t: '미입력', sep: true });
 
     ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
     ctx.font = fRow;
@@ -162,18 +196,25 @@ export default function ExportButton() {
     ctx.fillText('범례', bx + pad, by + pad);
 
     let ry = by + pad + headH;
-    ctx.textBaseline = 'middle';
     for (const r of rows) {
       const cy = ry + sh / 2;
       if (r.sep) {
         ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = Math.max(1, s);
         ctx.beginPath(); ctx.moveTo(bx + pad, ry - rowGap); ctx.lineTo(bx + boxW - pad, ry - rowGap); ctx.stroke();
       }
-      ctx.fillStyle = r.c;
-      ctx.fillRect(bx + pad, ry, sw, sh);
-      ctx.lineWidth = Math.max(1, s); ctx.strokeStyle = '#94a3b8';
-      ctx.strokeRect(bx + pad, ry, sw, sh);
-      ctx.fillStyle = '#475569'; ctx.font = fRow;
+      if (r.kind === 'swatch') {
+        ctx.fillStyle = r.c;
+        ctx.fillRect(bx + pad, ry, sw, sh);
+        ctx.lineWidth = Math.max(1, s); ctx.strokeStyle = '#94a3b8';
+        ctx.strokeRect(bx + pad, ry, sw, sh);
+      } else {
+        ctx.fillStyle = INST_COLOR;
+        ctx.font = `bold ${Math.round(13 * s)}px sans-serif`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('✕', bx + pad + sw / 2, cy);
+        ctx.textAlign = 'left';
+      }
+      ctx.fillStyle = '#475569'; ctx.font = fRow; ctx.textBaseline = 'middle';
       ctx.fillText(r.t, bx + pad + sw + 8 * s, cy);
       ry += lineH;
     }
@@ -191,14 +232,14 @@ export default function ExportButton() {
 
       const filledCount = Object.values(values || {})
         .filter((v) => v !== '' && v !== null && v !== undefined && Number.isFinite(Number(v))).length;
-      if (filledCount === 0) {
-        if (!confirm('입력된 값이 없습니다. 빈 지도를 그대로 다운로드하시겠습니까?')) {
+      const instValid = filterInstitutions(institutions, data.features);
+      if (filledCount === 0 && instValid.length === 0) {
+        if (!confirm('입력된 값·표시할 기관이 없습니다. 빈 지도를 그대로 다운로드하시겠습니까?')) {
           setBusy(false);
           return;
         }
       }
 
-      // 폴리곤 영역을 화면 가득 (투영 기준 확정)
       try {
         const b = L.geoJSON(data).getBounds();
         if (b.isValid()) {
@@ -227,10 +268,13 @@ export default function ExportButton() {
       // 2) 폴리곤 (동일 투영)
       for (const feat of data.features) drawFeature(ctx, feat, map, s);
 
-      // 3) 라벨 (동일 투영 → 폴리곤과 100% 정렬)
+      // 3) 지역명 라벨 (동일 투영)
       drawLabels(ctx, data, map, s);
 
-      // 4) 라벨 정보(제목/범례/워터마크)
+      // 4) 기관 ✕ (+ 선택 시 기관명) — 선택 지역 내부만, 동일 투영
+      drawInstitutions(ctx, instValid, map, s, showInstLabels);
+
+      // 5) 제목/범례/워터마크
       const ver = await loadDataVersion().catch(() => null);
       const ct = await loadCodeTable().catch(() => null);
       let regionLabel = '전국';
@@ -251,7 +295,7 @@ export default function ExportButton() {
 
       drawTitleBox(ctx, s, regionLabel, modeLabel, todayStr);
       drawWatermark(ctx, s, canvas.width, canvas.height, ver);
-      drawLegend(ctx, s, canvas.width, canvas.height);
+      drawLegend(ctx, s, canvas.width, canvas.height, instValid.length > 0);
 
       const region = selectedSgg || selectedSido || 'all';
       const filename = `choropleth_${viewMode}_${region}_${todayStr}.png`;

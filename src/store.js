@@ -7,7 +7,9 @@ const DEFAULTS = {
   values: {},
   paletteName: 'YlOrRd',
   classification: 'quantile',
-  classCount: 5
+  classCount: 5,
+  institutions: [],      // [{ name, lng, lat }] — WGS84 경위도
+  showInstLabels: false  // 기관명 라벨 표시 (기본 숨김)
 };
 
 export const useStore = create((set) => ({
@@ -29,6 +31,11 @@ export const useStore = create((set) => ({
   setPalette: (name) => set({ paletteName: name }),
   setClassification: (c) => set({ classification: c }),
   setClassCount: (n) => set({ classCount: n }),
+
+  // 기관 위치
+  setInstitutions: (arr) => set({ institutions: arr }),
+  clearInstitutions: () => set({ institutions: [] }),
+  setShowInstLabels: (b) => set({ showInstLabels: b }),
 
   // 전역 리셋 - 모든 상태 초기값 복원
   resetAll: () => set({ ...DEFAULTS })

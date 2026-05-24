@@ -236,3 +236,129 @@ export function parseExcel(file, codeTable) {
     reader.readAsArrayBuffer(file);
   });
 }
+
+/* ===================== 기관 위치(WGS84) 양식 ===================== */
+
+const KOREA_BOUNDS = { lngMin: 124, lngMax: 132, latMin: 33, latMax: 39 };
+
+export function downloadInstitutionTemplate() {
+  const header = ['기관명', '경도(X, 동경)', '위도(Y, 북위)'];
+  const example = [
+    ['예) ○○종합사회복지관', 127.0276, 37.4979],
+    ['예) △△행정복지센터', 126.9784, 37.5665],
+    ['', '', '']
+  ];
+  const ws = XLSX.utils.aoa_to_sheet([header, ...example]);
+  ws['!cols'] = [{ wch: 28 }, { wch: 16 }, { wch: 16 }];
+
+  const guide = [
+    ['📌 기관 위치 표시용 입력 양식'],
+    [''],
+    ['【좌표계 안내 — 매우 중요】'],
+    ['1. 좌표계는 WGS84 경위도(EPSG:4326), 십진수(decimal degrees)로 입력.'],
+    ['2. 경도(X) = 동경, 대한민국 범위 대략 124 ~ 132 (예: 127.0276)'],
+    ['3. 위도(Y) = 북위, 대한민국 범위 대략 33 ~ 39 (예: 37.4979)'],
+    ['4. TM/UTM-K(EPSG:5179, 미터 단위) 좌표는 지원하지 않음.'],
+    ['   → 미터 좌표(예: 198765.4)는 WGS84 경위도로 변환 후 입력.'],
+    ['5. 경도·위도 순서를 바꾸어 입력하지 말 것. (X=경도, Y=위도)'],
+    [''],
+    ['【작성 방법】'],
+    ['1. "입력양식" 시트에 기관명·경도·위도를 한 행씩 입력.'],
+    ['2. 예시 행("예)…")은 삭제 후 사용.'],
+    ['3. 빈 행은 무시됨. 기관명은 비워도 됨(좌표만 있으면 점 표시).'],
+    [''],
+    ['【표시 규칙】'],
+    ['1. 현재 화면에서 선택한 지역(폴리곤) 내부의 기관만 지도에 표시됨.'],
+    ['2. 선택 지역 밖의 기관은 표시되지 않음.'],
+    ['3. 기관명 라벨은 기본 숨김. 좌측 패널 "기관명 표시"를 켜면 화면·PNG 모두 표시.'],
+    ['4. 지도에는 회색 ✕ 기호로 표기됨.'],
+    [''],
+    ['데이터 좌표계: WGS84 (EPSG:4326) · 한국보건사회연구원 제공']
+  ];
+  const wsGuide = XLSX.utils.aoa_to_sheet(guide);
+  wsGuide['!cols'] = [{ wch: 74 }];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '입력양식');
+  XLSX.utils.book_append_sheet(wb, wsGuide, '사용방법(WGS84)');
+  XLSX.writeFile(wb, `institution_template_WGS84_${new Date().toISOString().slice(0, 10)}.xlsx`);
+}
+
+export function parseInstitutionExcel(file) {
+  return new Promise((resolve, reject) => {
+    const name = (file.name || '').toLowerCase();
+    if (!name.endsWith('.xlsx') && !name.endsWith('.xls')) {
+      reject(new Error('xlsx 또는 xls 파일만 지원함'));
+      return;
+    }
+    if (file.size > 50 * 1024 * 1024) {
+      reject(new Error('파일 크기 50MB 초과'));
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target.result);
+        const wb = XLSX.read(data, { type: 'array' });
+        if (!wb.SheetNames?.length) { reject(new Error('시트가 없는 빈 파일')); return; }
+        const sheetName = wb.SheetNames.includes('입력양식') ? '입력양식' : wb.SheetNames[0];
+        const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1, defval: '', raw: false });
+        if (rows.length < 2) { reject(new Error('데이터 행이 없음 (헤더만 있거나 빈 시트)')); return; }
+
+        const header = rows[0].map((h) => String(h ?? '').trim());
+        const nameIdx = header.findIndex((h) => /기관|명칭|이름|name/i.test(h));
+        const lngIdx = header.findIndex((h) => /경도|동경|lng|lon|longitude|^x/i.test(h));
+        const latIdx = header.findIndex((h) => /위도|북위|lat|latitude|^y/i.test(h));
+
+        if (lngIdx < 0 || latIdx < 0) {
+          reject(new Error('"경도(X)" / "위도(Y)" 컬럼을 찾지 못함. 양식 다운로드 후 재시도하시오.'));
+          return;
+        }
+
+        const points = [];
+        const failed = [];
+        for (let i = 1; i < rows.length; i++) {
+          const row = rows[i];
+          const nm = nameIdx >= 0 ? String(row[nameIdx] ?? '').trim() : '';
+          const lngRaw = row[lngIdx];
+          const latRaw = row[latIdx];
+          const emptyCoord = (lngRaw === '' || lngRaw == null) && (latRaw === '' || latRaw == null);
+          if (emptyCoord && !nm) continue;          // 완전 빈 행
+          if (nm.startsWith('예)')) continue;        // 예시 행
+
+          const lng = Number(lngRaw);
+          const lat = Number(latRaw);
+          if (!Number.isFinite(lng) || !Number.isFinite(lat)) {
+            failed.push({ row: i + 1, name: nm, reason: '좌표가 숫자가 아님' });
+            continue;
+          }
+          if (lng < KOREA_BOUNDS.lngMin || lng > KOREA_BOUNDS.lngMax ||
+              lat < KOREA_BOUNDS.latMin || lat > KOREA_BOUNDS.latMax) {
+            failed.push({ row: i + 1, name: nm, reason: `WGS84 범위 밖 (경도 ${lng}, 위도 ${lat}) — 좌표계/순서 확인` });
+            continue;
+          }
+          points.push({ name: nm, lng, lat });
+        }
+
+        if (points.length === 0) {
+          reject(new Error(
+            `유효한 좌표 0건. 좌표계(WGS84 경위도)·컬럼명·경위도 순서를 확인하시오.\n` +
+            `(전체 ${rows.length - 1}행, 제외 ${failed.length}건)`
+          ));
+          return;
+        }
+
+        resolve({
+          points,
+          failed,
+          stats: { totalRows: rows.length - 1, okCount: points.length, failedCount: failed.length, sheetName }
+        });
+      } catch (err) {
+        reject(new Error('파일 파싱 실패: ' + err.message));
+      }
+    };
+    reader.onerror = () => reject(new Error('파일 읽기 실패'));
+    reader.readAsArrayBuffer(file);
+  });
+}

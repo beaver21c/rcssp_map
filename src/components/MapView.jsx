@@ -4,6 +4,7 @@ import L from 'leaflet';
 import { useGeoData, loadCodeTable } from '../hooks/useGeoData.js';
 import { useColorScale } from '../hooks/useColorScale.js';
 import { baseStyle, hoverStyle, extractCode, extractName } from '../utils/mapStyles.js';
+import { filterInstitutions } from '../utils/geoUtils.js';
 import { useStore } from '../store.js';
 import Legend from './Legend.jsx';
 
@@ -24,10 +25,11 @@ function filterFeatures(features, viewMode, selectedSgg, mergedCity) {
   return features.filter((f) => f.properties?.sgg_cd === selectedSgg);
 }
 
-/**
- * leaflet map 인스턴스를 window에 노출 (PNG export 용)
- * + 현재 표시 중인 GeoJSON layer 참조도 함께 노출
- */
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
 function MapRefHolder({ data }) {
   const map = useMap();
   useEffect(() => {
@@ -78,11 +80,7 @@ function RegionLabels({ data, viewMode, fitKey }) {
           const name = extractName(feat.properties);
           if (!name) continue;
           const lbl = L.marker(center, {
-            icon: L.divIcon({
-              className: 'region-label',
-              html: name,
-              iconSize: null
-            }),
+            icon: L.divIcon({ className: 'region-label', html: name, iconSize: null }),
             interactive: false,
             keyboard: false
           });
@@ -102,6 +100,41 @@ function RegionLabels({ data, viewMode, fitKey }) {
   return null;
 }
 
+/**
+ * 기관 위치 레이어
+ * - 표시 폴리곤 내부 기관만 (선택 지역 밖 미표시)
+ * - 회색 ✕, 라벨(기관명)은 showLabels=true 일 때만
+ * - 화면에 실제 표시되는 유효 기관을 window.__institutionsValid 로 노출 (PNG용)
+ */
+function InstitutionLayer({ data, showLabels }) {
+  const map = useMap();
+  const { institutions } = useStore();
+  useEffect(() => {
+    const markers = [];
+    const features = data?.features || [];
+    const valid = filterInstitutions(institutions, features);
+    if (typeof window !== 'undefined') {
+      window.__institutionsValid = valid;
+      window.__showInstLabels = !!showLabels;
+    }
+    valid.forEach((it) => {
+      const labelHtml = (showLabels && it.name)
+        ? `<span class="inst-name">${escapeHtml(it.name)}</span>` : '';
+      const html = `<span class="inst-x">✕</span>${labelHtml}`;
+      const m = L.marker([it.lat, it.lng], {
+        icon: L.divIcon({ className: 'inst-divicon', html, iconSize: [0, 0], iconAnchor: [0, 0] }),
+        interactive: !!it.name,
+        keyboard: false
+      });
+      if (it.name) m.bindTooltip(it.name, { direction: 'top' });
+      m.addTo(map);
+      markers.push(m);
+    });
+    return () => { markers.forEach((m) => map.removeLayer(m)); };
+  }, [data, institutions, showLabels, map]);
+  return null;
+}
+
 export default function MapView() {
   const {
     viewMode,
@@ -110,7 +143,8 @@ export default function MapView() {
     values,
     paletteName,
     classification,
-    classCount
+    classCount,
+    showInstLabels
   } = useStore();
   const [codeTable, setCodeTable] = useState(null);
 
@@ -198,6 +232,7 @@ export default function MapView() {
 
         {filtered && <FitBoundsOnData data={filtered} fitKey={layerKey} />}
         {filtered && <RegionLabels data={filtered} viewMode={viewMode} fitKey={layerKey} />}
+        {filtered && <InstitutionLayer data={filtered} showLabels={showInstLabels} />}
         <MapRefHolder data={filtered} />
       </MapContainer>
 

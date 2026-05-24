@@ -31,6 +31,36 @@ html, body, #root {
   padding: 0 !important;
 }
 
+/* 기관 위치 마커 (회색 ✕ + 선택적 기관명) */
+.inst-divicon {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+.inst-x {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform: translate(-50%, -50%);
+  color: #374151;
+  font-size: 13px;
+  font-weight: bold;
+  line-height: 1;
+  text-shadow: 1px 1px 0 #fff, -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff;
+  pointer-events: none;
+}
+.inst-name {
+  position: absolute;
+  left: 0;
+  top: 8px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: 10px;
+  color: #374151;
+  text-shadow: 1px 1px 0 #fff, -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff;
+  pointer-events: none;
+}
+
 .leaflet-interactive:hover { filter: brightness(1.05); }
 
 /* 스크롤바 */
@@ -44,14 +74,10 @@ html, body, #root {
     margin-right: 8px !important;
     margin-top: 8px !important;
   }
-  .region-label {
-    font-size: 9px;
-  }
+  .region-label { font-size: 9px; }
 }
 
 /* 태블릿 (768~1023px) */
 @media (min-width: 768px) and (max-width: 1023px) {
-  .region-label {
-    font-size: 9px;
-  }
+  .region-label { font-size: 9px; }
 }

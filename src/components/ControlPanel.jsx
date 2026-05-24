@@ -4,6 +4,7 @@ import { loadCodeTable } from '../hooks/useGeoData.js';
 import DirectInput from './DirectInput.jsx';
 import ExcelUpload from './ExcelUpload.jsx';
 import ColorSettings from './ColorSettings.jsx';
+import InstitutionUpload from './InstitutionUpload.jsx';
 import { _bm } from '../utils/_meta.js';
 
 const VIEW_MODES = [
@@ -136,6 +137,14 @@ export default function ControlPanel() {
       <section className="pt-3 border-t border-slate-200">
         <h2 className="text-sm font-bold text-slate-700 mb-2">③ 색상 설정</h2>
         <ColorSettings />
+      </section>
+
+      <section className="pt-3 border-t border-slate-200">
+        <h2 className="text-sm font-bold text-slate-700 mb-2">④ 기관 위치 표시 (선택)</h2>
+        <p className="text-[11px] text-slate-500 mb-2">
+          코로플레스 없이 경계 + 기관 점만 출력도 가능.
+        </p>
+        <InstitutionUpload />
       </section>
 
       <div style={{ flex: 1 }} aria-hidden="true" />
