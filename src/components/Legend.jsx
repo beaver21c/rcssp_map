@@ -21,23 +21,23 @@ export default function Legend() {
   };
 
   return (
-    <div className="absolute right-3 bottom-3 z-[600] bg-white/95 backdrop-blur border border-slate-200 rounded-md shadow-md px-3 py-2 text-xs">
+    <div className="absolute right-3 bottom-3 z-[600] bg-white border border-slate-400 rounded-md shadow-md px-3 py-2 text-xs">
       <div className="font-medium text-slate-700 mb-1.5">범례</div>
       <div className="flex flex-col gap-0.5">
         {colors.map((c, i) => (
           <div key={i} className="flex items-center gap-2">
             <div
-              className="w-5 h-3.5 border border-white/50"
+              className="w-5 h-3.5 border border-slate-400"
               style={{ backgroundColor: c }}
             />
-            <span className="text-slate-600">
+            <span className="text-slate-700">
               {fmt(breaks[i])} ~ {fmt(breaks[i + 1])}
             </span>
           </div>
         ))}
-        <div className="flex items-center gap-2 mt-1 pt-1 border-t border-slate-100">
-          <div className="w-5 h-3.5 bg-slate-200 border border-white/50" />
-          <span className="text-slate-500">미입력</span>
+        <div className="flex items-center gap-2 mt-1 pt-1 border-t border-slate-300">
+          <div className="w-5 h-3.5 bg-slate-200 border border-slate-400" />
+          <span className="text-slate-600">미입력</span>
         </div>
       </div>
     </div>

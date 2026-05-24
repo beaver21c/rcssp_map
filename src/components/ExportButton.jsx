@@ -3,6 +3,7 @@ import L from 'leaflet';
 import html2canvas from 'html2canvas';
 import { useStore } from '../store.js';
 import { loadDataVersion, loadCodeTable } from '../hooks/useGeoData.js';
+import { extractName } from '../utils/mapStyles.js';
 import { _bm } from '../utils/_meta.js';
 
 export default function ExportButton() {
@@ -11,13 +12,57 @@ export default function ExportButton() {
   const [scale, setScale] = useState(2);
   const [cleanMode, setCleanMode] = useState(true);
 
+  /**
+   * 폴리곤 중심점 라벨을 캡처된 canvas 위에 직접 그린다.
+   * - html2canvas는 Leaflet marker-pane의 translate3d transform을 잘못 처리 → 라벨이 어긋남
+   * - 따라서 라벨 DOM은 캡처에서 제외하고, Leaflet의 latLngToContainerPoint()로
+   *   폴리곤과 동일한 투영을 사용해 캔버스에 직접 텍스트를 렌더 → 항상 정확히 일치
+   */
+  function drawLabelsOnCanvas(canvas, map, target, data, s) {
+    if (!map || !data || !data.features?.length) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // map 컨테이너와 캡처 대상(target) 사이의 오프셋 보정
+    const mapEl = map.getContainer();
+    const tRect = target.getBoundingClientRect();
+    const mRect = mapEl.getBoundingClientRect();
+    const offX = mRect.left - tRect.left;
+    const offY = mRect.top - tRect.top;
+    const cw = mapEl.clientWidth;
+    const ch = mapEl.clientHeight;
+
+    const fontPx = Math.round(10 * s);
+    ctx.font = `${fontPx}px "Noto Sans KR", "Malgun Gothic", sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    for (const feat of data.features) {
+      try {
+        const name = extractName(feat.properties);
+        if (!name) continue;
+        const center = L.geoJSON(feat).getBounds().getCenter();
+        const p = map.latLngToContainerPoint(center);
+        if (p.x < 0 || p.y < 0 || p.x > cw || p.y > ch) continue; // 화면 밖 제외
+        const x = (p.x + offX) * s;
+        const y = (p.y + offY) * s;
+        // 흰색 외곽선(가독성) → 회색 본문
+        ctx.lineWidth = Math.max(2, Math.round(3 * s));
+        ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+        ctx.strokeText(name, x, y);
+        ctx.fillStyle = '#6b7280';
+        ctx.fillText(name, x, y);
+      } catch (e) { /* skip */ }
+    }
+  }
+
   const onExport = async () => {
     if (busy) return;
     setBusy(true);
 
     let watermark = null;
     let titleBar = null;
-    let hiddenTiles = [];
+    let hidden = []; // { el, prev } 복원용
 
     try {
       const target = document.getElementById('map-export-area');
@@ -33,33 +78,34 @@ export default function ExportButton() {
         }
       }
 
-      // 캡처 직전: 폴리곤 영역에 fitBounds → 화면 가득 채워 빈 공간 최소화
       const map = window.__leafletMap;
       const data = window.__leafletData;
+
+      // 캡처 직전: fitBounds로 폴리곤 영역을 화면 가득
       if (map && data && data.features?.length) {
         try {
           const layer = L.geoJSON(data);
           const bounds = layer.getBounds();
           if (bounds.isValid()) {
-            map.fitBounds(bounds, {
-              padding: [60, 60],
-              animate: false
-            });
-            // 렌더링 안정화 대기
-            await new Promise((r) => setTimeout(r, 350));
+            map.fitBounds(bounds, { padding: [60, 60], animate: false });
+            await new Promise((r) => setTimeout(r, 400));
           }
         } catch (e) {
           console.warn('[Export] fitBounds 실패:', e);
         }
       }
 
+      // 클린 모드: 타일 배경 + 컨트롤(줌·attribution) 숨김 → 지도 외 영역 흰색
       if (cleanMode) {
         const tilePane = target.querySelector('.leaflet-tile-pane');
-        if (tilePane) {
-          hiddenTiles.push({ el: tilePane, prev: tilePane.style.display });
-          tilePane.style.display = 'none';
-        }
+        if (tilePane) { hidden.push({ el: tilePane, prev: tilePane.style.display }); tilePane.style.display = 'none'; }
+        const ctrl = target.querySelector('.leaflet-control-container');
+        if (ctrl) { hidden.push({ el: ctrl, prev: ctrl.style.display }); ctrl.style.display = 'none'; }
       }
+
+      // 라벨 DOM(marker-pane)은 캡처에서 제외 → 캡처 후 캔버스에 직접 렌더
+      const markerPane = target.querySelector('.leaflet-marker-pane');
+      if (markerPane) { hidden.push({ el: markerPane, prev: markerPane.style.display }); markerPane.style.display = 'none'; }
 
       const ver = await loadDataVersion().catch(() => null);
       const ct = await loadCodeTable().catch(() => null);
@@ -84,19 +130,18 @@ export default function ExportButton() {
         titleBar = document.createElement('div');
         titleBar.id = '__export_title__';
         titleBar.style.cssText = `
-          position: absolute; top: 8px; left: 8px; z-index: 1000;
-          background: rgba(255,255,255,0.95); padding: 2px 10px 5px 10px;
-          border: 1px solid #cbd5e1; border-radius: 4px;
+          position: absolute; top: 12px; left: 12px; z-index: 1000;
+          background: rgba(255,255,255,0.97); padding: 12px 18px 14px 18px;
+          border: 1px solid #cbd5e1; border-radius: 6px;
           font-family: 'Noto Sans KR', sans-serif; pointer-events: none;
-          box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-          line-height: 1.2;
+          box-shadow: 0 1px 4px rgba(0,0,0,0.12);
         `;
         titleBar.innerHTML = `
-          <div style="font-size:7px;color:#f9f9f9;margin:0;padding:0;line-height:0.9;letter-spacing:0.02em;font-weight:300">${_bm}</div>
-          <div style="font-size:13px;font-weight:bold;color:#1e293b;margin:0;padding:0;line-height:1.25">
+          <div style="font-size:7px;color:#f9f9f9;margin:0 0 2px 0;line-height:1;letter-spacing:0.02em;font-weight:300">${_bm}</div>
+          <div style="font-size:15px;font-weight:bold;color:#1e293b;margin:0;line-height:1.5">
             지역사회보장계획 수립을 위한 GIS분석
           </div>
-          <div style="font-size:11px;color:#475569;margin:0;padding:0;line-height:1.2">
+          <div style="font-size:11px;color:#475569;margin-top:5px;line-height:1.4">
             ${regionLabel} · ${modeLabel} · ${todayStr}
           </div>
         `;
@@ -121,13 +166,15 @@ export default function ExportButton() {
         await document.fonts.ready;
       }
 
-      // 캡처: transform 변환·영역 자르기 모두 제거 → 화면 그대로 캡처
       const canvas = await html2canvas(target, {
         scale,
         useCORS: true,
         backgroundColor: cleanMode ? '#ffffff' : null,
         logging: false
       });
+
+      // 캡처된 캔버스 위에 라벨을 직접 투영 렌더 (폴리곤과 100% 정렬)
+      drawLabelsOnCanvas(canvas, map, target, data, scale);
 
       const region = selectedSgg || selectedSido || 'all';
       const filename = `choropleth_${viewMode}_${region}_${todayStr}.png`;
@@ -149,7 +196,7 @@ export default function ExportButton() {
     } finally {
       if (titleBar?.parentNode) titleBar.parentNode.removeChild(titleBar);
       if (watermark?.parentNode) watermark.parentNode.removeChild(watermark);
-      hiddenTiles.forEach(({ el, prev }) => { el.style.display = prev || ''; });
+      hidden.forEach(({ el, prev }) => { el.style.display = prev || ''; });
       setBusy(false);
     }
   };
