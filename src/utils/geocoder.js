@@ -226,7 +226,7 @@ export async function geocodeAll(rows, nameCol, addrCol, opts, onProgress, shoul
       error: r.error
     });
 
-    if (onProgress) onProgress(i + 1, rows.length);
+    if (onProgress) onProgress({ done: i + 1, total: rows.length, okCount, failCount, name, status });
     if (delayMs > 0 && i < rows.length - 1) await sleep(delayMs);
   }
 
