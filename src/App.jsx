@@ -5,10 +5,12 @@ import UsageGuide from './components/UsageGuide.jsx';
 import Footer from './components/Footer.jsx';
 import ExportButton from './components/ExportButton.jsx';
 import ResetButton from './components/ResetButton.jsx';
+import ServiceGuide from './components/ServiceGuide.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 
 export default function App() {
   const [panelOpen, setPanelOpen] = useState(true);
+  const [guideOpen, setGuideOpen] = useState(false);
 
   return (
     <div className="flex flex-col h-screen w-screen">
@@ -32,10 +34,19 @@ export default function App() {
           </h1>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
+          <button
+            onClick={() => setGuideOpen(true)}
+            className="px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm border border-brand-500 text-brand-600 rounded hover:bg-brand-50 font-medium whitespace-nowrap"
+          >
+            <span className="hidden sm:inline">📖 이용 가이드</span>
+            <span className="sm:hidden">📖</span>
+          </button>
           <ResetButton />
           <ExportButton />
         </div>
       </header>
+
+      <ServiceGuide open={guideOpen} onClose={() => setGuideOpen(false)} />
 
       <main className="flex flex-1 overflow-hidden relative">
         <aside
