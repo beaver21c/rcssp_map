@@ -8,7 +8,7 @@ const DEFAULTS = {
   paletteName: 'YlOrRd',
   classification: 'quantile',
   classCount: 5,
-  institutions: [],      // [{ name, lng, lat }] — WGS84 경위도
+  institutions: [],      // [{ name, lng, lat, addr?, source? }] — WGS84 경위도 (addr/source는 지오코딩 결과용 선택 필드)
   showInstLabels: false  // 기관명 라벨 표시 (기본 숨김)
 };
 

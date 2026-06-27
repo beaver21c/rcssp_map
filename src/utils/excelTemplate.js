@@ -284,6 +284,131 @@ export function downloadInstitutionTemplate() {
   XLSX.writeFile(wb, `institution_template_WGS84_${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
 
+/* ===================== 주소 지오코딩 양식 ===================== */
+
+export function downloadAddressTemplate() {
+  const header = ['기관명', '주소'];
+  const example = [
+    ['예) ○○종합사회복지관', '서울특별시 종로구 삼일대로 467'],
+    ['예) △△행정복지센터', '서울 중구 세종대로 110'],
+    ['', '']
+  ];
+  const ws = XLSX.utils.aoa_to_sheet([header, ...example]);
+  ws['!cols'] = [{ wch: 28 }, { wch: 48 }];
+
+  const guide = [
+    ['📌 주소 → 좌표 자동변환(지오코딩) 입력 양식'],
+    [''],
+    ['【이 양식은 무엇인가요?】'],
+    ['1. 좌표(경도·위도)를 모를 때 사용하는 양식입니다.'],
+    ['2. 기관명과 "주소"만 적으면, 화면에서 카카오 지도 서비스가'],
+    ['   주소를 자동으로 좌표로 바꿔 지도에 점으로 표시합니다.'],
+    ['3. 좌표(WGS84)를 이미 가지고 있다면 이 양식이 아니라'],
+    ['   "기관 위치 양식(WGS84)"을 사용하세요.'],
+    [''],
+    ['【컬럼 구성 — 2칸만 있습니다】'],
+    ['  기관명 | 주소'],
+    ['  · 기관명: 지도 위에 표시할 이름 (비워도 됨 — 점만 표시)'],
+    ['  · 주소  : 도로명주소·지번주소 모두 가능 (예: 서울특별시 종로구 삼일대로 467)'],
+    [''],
+    ['【작성 방법】'],
+    ['1. "입력양식" 시트에 기관명·주소를 한 행씩 입력하세요.'],
+    ['2. 예시 행("예)…")은 삭제 후 사용하세요.'],
+    ['3. 빈 행은 무시됩니다.'],
+    ['4. 좌표(경도/위도) 컬럼은 필요 없습니다. (주소만 있으면 됩니다)'],
+    [''],
+    ['【사용 전 준비 — 카카오 API 키】'],
+    ['1. 주소를 좌표로 바꾸려면 카카오 개발자 API 키가 필요합니다(무료).'],
+    ['2. 발급 방법은 화면 좌측 "④ 기관 위치 표시 → 주소 지오코딩" 탭의'],
+    ['   안내, 또는 우측 상단 "이용 가이드"를 참고하세요.'],
+    [''],
+    ['【지오코딩이 실패하는 경우】'],
+    ['1. 검색 결과 없음: 주소가 부정확하거나 상세(동·호수)가 과도할 때 →'],
+    ['   도로명/지번 기본 주소로 정리 후 재시도.'],
+    ['2. 실패한 행은 화면의 "실패 목록"에 따로 표시되니 수정해 재업로드하세요.'],
+    [''],
+    ['【표시 규칙】'],
+    ['1. 현재 화면에서 선택한 지역(폴리곤) 내부의 기관만 지도에 표시됩니다.'],
+    ['2. 기관명 라벨은 좌측 패널 "기관명 표시"를 켜면 화면·PNG 모두 표시됩니다.'],
+    [''],
+    ['데이터 처리: 브라우저에서 직접 지오코딩 · 한국보건사회연구원 제공']
+  ];
+  const wsGuide = XLSX.utils.aoa_to_sheet(guide);
+  wsGuide['!cols'] = [{ wch: 74 }];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '입력양식');
+  XLSX.utils.book_append_sheet(wb, wsGuide, '사용방법(주소)');
+  XLSX.writeFile(wb, `address_template_${new Date().toISOString().slice(0, 10)}.xlsx`);
+}
+
+const ADDR_NAME_RE = /기관|시설|명칭|이름|name/i;
+const ADDR_ADDR_RE = /주소|소재지|도로명|지번|address|addr|location/i;
+
+/**
+ * 주소 지오코딩용 엑셀 파싱 — 행 객체 배열 + 컬럼 자동탐지 결과 반환.
+ * 좌표 검증은 하지 않음(지오코딩 단계에서 좌표 생성).
+ * @returns {Promise<{rows, columns, detected:{nameCol, addrCol}, sheetName}>}
+ */
+export function parseAddressExcel(file) {
+  return new Promise((resolve, reject) => {
+    const name = (file.name || '').toLowerCase();
+    if (!name.endsWith('.xlsx') && !name.endsWith('.xls')) {
+      reject(new Error('xlsx 또는 xls 파일만 지원함'));
+      return;
+    }
+    if (file.size > 50 * 1024 * 1024) {
+      reject(new Error('파일 크기 50MB 초과'));
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target.result);
+        const wb = XLSX.read(data, { type: 'array' });
+        if (!wb.SheetNames?.length) { reject(new Error('시트가 없는 빈 파일')); return; }
+        const sheetName = wb.SheetNames.includes('입력양식') ? '입력양식' : wb.SheetNames[0];
+        const sheet = wb.Sheets[sheetName];
+
+        // 헤더 추출(1행)
+        const aoa = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: false });
+        if (aoa.length < 2) { reject(new Error('데이터 행이 없음 (헤더만 있거나 빈 시트)')); return; }
+        const columns = aoa[0].map((h) => String(h ?? '').trim()).filter((h) => h !== '');
+        if (columns.length === 0) { reject(new Error('헤더(컬럼명) 행이 비어 있음')); return; }
+
+        // 객체 배열(키=헤더)
+        const rows = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false });
+
+        // 컬럼 자동탐지
+        const addrCol = columns.find((c) => ADDR_ADDR_RE.test(c)) || '';
+        const nameCol = columns.find((c) => ADDR_NAME_RE.test(c)) || '';
+
+        // 예시/빈 행 제거(미리 정리해 두면 진행률·통계가 정확)
+        const cleaned = rows.filter((r) => {
+          const nm = nameCol ? String(r[nameCol] ?? '').trim() : '';
+          const ad = addrCol ? String(r[addrCol] ?? '').trim() : '';
+          if (!nm && !ad) return false;            // 완전 빈 행
+          if (nm.startsWith('예)') || ad.startsWith('예)')) return false; // 예시 행
+          return true;
+        });
+
+        resolve({
+          rows: cleaned,
+          columns,
+          detected: { nameCol, addrCol },
+          sheetName,
+          totalRows: cleaned.length
+        });
+      } catch (err) {
+        reject(new Error('파일 파싱 실패: ' + err.message));
+      }
+    };
+    reader.onerror = () => reject(new Error('파일 읽기 실패'));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
 export function parseInstitutionExcel(file) {
   return new Promise((resolve, reject) => {
     const name = (file.name || '').toLowerCase();

@@ -5,6 +5,7 @@ import DirectInput from './DirectInput.jsx';
 import ExcelUpload from './ExcelUpload.jsx';
 import ColorSettings from './ColorSettings.jsx';
 import InstitutionUpload from './InstitutionUpload.jsx';
+import GeocodeUpload from './GeocodeUpload.jsx';
 import { _bm } from '../utils/_meta.js';
 
 const VIEW_MODES = [
@@ -23,6 +24,7 @@ export default function ControlPanel() {
     useStore();
   const [codeTable, setCodeTable] = useState(null);
   const [activeTab, setActiveTab] = useState('excel');
+  const [instTab, setInstTab] = useState('coord');
 
   useEffect(() => {
     loadCodeTable().then(setCodeTable).catch((e) => console.error(e));
@@ -144,7 +146,34 @@ export default function ControlPanel() {
         <p className="text-[11px] text-slate-500 mb-2">
           코로플레스 없이 경계 + 기관 점만 출력도 가능.
         </p>
-        <InstitutionUpload />
+        <div className="flex gap-1 mb-2">
+          <button
+            onClick={() => setInstTab('coord')}
+            className={`flex-1 px-2 py-1.5 text-xs rounded border transition ${
+              instTab === 'coord'
+                ? 'border-brand-500 bg-brand-50 text-brand-700 font-medium'
+                : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            좌표 직접 (WGS84)
+          </button>
+          <button
+            onClick={() => setInstTab('geocode')}
+            className={`flex-1 px-2 py-1.5 text-xs rounded border transition ${
+              instTab === 'geocode'
+                ? 'border-brand-500 bg-brand-50 text-brand-700 font-medium'
+                : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            주소 지오코딩
+          </button>
+        </div>
+        <p className="text-[11px] text-slate-500 mb-2">
+          {instTab === 'coord'
+            ? '경도·위도 좌표가 이미 있는 경우.'
+            : '주소만 있으면 카카오 API로 좌표 자동변환.'}
+        </p>
+        {instTab === 'coord' ? <InstitutionUpload /> : <GeocodeUpload />}
       </section>
 
       <div style={{ flex: 1 }} aria-hidden="true" />
