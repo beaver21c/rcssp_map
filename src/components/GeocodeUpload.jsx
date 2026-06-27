@@ -9,6 +9,15 @@ const METHODS = [
   { id: 'sdk', label: 'JavaScript 키 (SDK)', hint: '도메인 등록 필요·CORS 안전' }
 ];
 
+function formatDuration(ms) {
+  if (ms == null || !Number.isFinite(ms) || ms < 0) return '계산 중…';
+  const s = Math.round(ms / 1000);
+  if (s < 60) return `약 ${s}초`;
+  const m = Math.floor(s / 60);
+  const rs = s % 60;
+  return rs ? `약 ${m}분 ${rs}초` : `약 ${m}분`;
+}
+
 export default function GeocodeUpload() {
   const { setInstitutions } = useStore();
 
@@ -20,9 +29,10 @@ export default function GeocodeUpload() {
   const [error, setError] = useState(null);
 
   const [running, setRunning] = useState(false);
-  const [progress, setProgress] = useState({ done: 0, total: 0 });
+  const [progress, setProgress] = useState({ done: 0, total: 0, okCount: 0, failCount: 0, name: '', etaMs: null });
   const [outcome, setOutcome] = useState(null);  // { results, stats }
   const stopRef = useRef(false);
+  const startRef = useRef(0);
 
   const onFile = async (e) => {
     setError(null); setOutcome(null); setParsed(null);
@@ -52,14 +62,19 @@ export default function GeocodeUpload() {
 
     setRunning(true);
     stopRef.current = false;
-    setProgress({ done: 0, total: parsed.rows.length });
+    startRef.current = Date.now();
+    setProgress({ done: 0, total: parsed.rows.length, okCount: 0, failCount: 0, name: '', etaMs: null });
     try {
       const { results, stats } = await geocodeAll(
         parsed.rows,
         nameCol,
         addrCol,
         { method, key: apiKey.trim() },
-        (done, total) => setProgress({ done, total }),
+        (p) => {
+          const elapsed = Date.now() - startRef.current;
+          const etaMs = p.done > 0 ? Math.round((elapsed / p.done) * (p.total - p.done)) : null;
+          setProgress({ ...p, etaMs });
+        },
         () => stopRef.current
       );
       setOutcome({ results, stats });
@@ -228,14 +243,24 @@ export default function GeocodeUpload() {
           ▶ 지오코딩 실행 → 지도에 표시
         </button>
       ) : (
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5 p-2 bg-slate-50 border border-slate-200 rounded">
           <div className="h-2 w-full bg-slate-200 rounded overflow-hidden">
             <div className="h-full bg-brand-500 transition-all" style={{ width: `${pct}%` }} />
           </div>
-          <div className="flex items-center justify-between text-[11px] text-slate-600">
-            <span>지오코딩 중… {progress.done} / {progress.total} ({pct}%)</span>
-            <button onClick={onStop} className="px-2 py-0.5 border border-slate-300 rounded hover:bg-slate-50">중지</button>
+          <div className="flex items-center justify-between text-[11px] text-slate-700">
+            <span className="font-medium">지오코딩 중… {progress.done} / {progress.total} ({pct}%)</span>
+            <button onClick={onStop} className="px-2 py-0.5 border border-slate-300 rounded bg-white hover:bg-slate-100">중지</button>
           </div>
+          <div className="flex items-center gap-3 text-[11px]">
+            <span className="text-emerald-600">성공 {progress.okCount ?? 0}</span>
+            <span className={progress.failCount > 0 ? 'text-red-600' : 'text-slate-400'}>실패 {progress.failCount ?? 0}</span>
+            <span className="text-slate-500 ml-auto">남은 예상 {formatDuration(progress.etaMs)}</span>
+          </div>
+          {progress.name && (
+            <div className="text-[10px] text-slate-400 truncate" title={progress.name}>
+              처리 중: {progress.name}
+            </div>
+          )}
         </div>
       )}
 
