@@ -317,9 +317,11 @@ export function downloadAddressTemplate() {
     ['3. 빈 행은 무시됩니다.'],
     ['4. 좌표(경도/위도) 컬럼은 필요 없습니다. (주소만 있으면 됩니다)'],
     [''],
-    ['【사용 전 준비 — 카카오 API 키】'],
-    ['1. 주소를 좌표로 바꾸려면 카카오 개발자 API 키가 필요합니다(무료).'],
-    ['2. 발급 방법은 화면 좌측 "④ 기관 위치 표시 → 주소 지오코딩" 탭의'],
+    ['【사용 전 준비 — 지오코딩 API 키】'],
+    ['1. 주소를 좌표로 바꾸려면 V-World 또는 카카오 API 키가 필요합니다.'],
+    ['2. 둘 중 하나만 입력해도 동작하며, 둘 다 입력하면 V-World로 먼저'],
+    ['   찾고 실패한 주소만 카카오로 재시도(폴백)합니다.'],
+    ['3. 발급 방법은 화면 좌측 "④ 기관 위치 표시 → 주소 지오코딩" 탭의'],
     ['   안내, 또는 우측 상단 "이용 가이드"를 참고하세요.'],
     [''],
     ['【지오코딩이 실패하는 경우】'],
@@ -435,6 +437,7 @@ export function parseInstitutionExcel(file) {
         const nameIdx = header.findIndex((h) => /기관|명칭|이름|name/i.test(h));
         const lngIdx = header.findIndex((h) => /경도|동경|lng|lon|longitude|^x/i.test(h));
         const latIdx = header.findIndex((h) => /위도|북위|lat|latitude|^y/i.test(h));
+        const addrIdx = header.findIndex((h) => /^주소$|소재지|도로명|지번|address|addr/i.test(h));
 
         if (lngIdx < 0 || latIdx < 0) {
           reject(new Error('"경도(X)" / "위도(Y)" 컬럼을 찾지 못함. 양식 다운로드 후 재시도하시오.'));
@@ -463,7 +466,8 @@ export function parseInstitutionExcel(file) {
             failed.push({ row: i + 1, name: nm, reason: `WGS84 범위 밖 (경도 ${lng}, 위도 ${lat}) — 좌표계/순서 확인` });
             continue;
           }
-          points.push({ name: nm, lng, lat });
+          const addr = addrIdx >= 0 ? String(row[addrIdx] ?? '').trim() : '';
+          points.push({ name: nm, lng, lat, addr });
         }
 
         if (points.length === 0) {

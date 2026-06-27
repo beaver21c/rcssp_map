@@ -20,8 +20,8 @@ const TABS = [
 ];
 
 export default function ControlPanel() {
-  const { viewMode, selectedSido, selectedSgg, setViewMode, setSelectedSido, setSelectedSgg } =
-    useStore();
+  const { viewMode, selectedSido, selectedSgg, setViewMode, setSelectedSido, setSelectedSgg,
+    showInstLabels, setShowInstLabels } = useStore();
   const [codeTable, setCodeTable] = useState(null);
   const [activeTab, setActiveTab] = useState('excel');
   const [instTab, setInstTab] = useState('coord');
@@ -171,8 +171,24 @@ export default function ControlPanel() {
         <p className="text-[11px] text-slate-500 mb-2">
           {instTab === 'coord'
             ? '경도·위도 좌표가 이미 있는 경우.'
-            : '주소만 있으면 카카오 API로 좌표 자동변환.'}
+            : '주소만 있으면 V-World·카카오 API로 좌표 자동변환.'}
         </p>
+
+        <div className="mb-2 p-2 bg-slate-50 border border-slate-200 rounded">
+          <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showInstLabels}
+              onChange={(e) => setShowInstLabels(e.target.checked)}
+              className="accent-brand-500"
+            />
+            지도에 기관명 표시 <span className="text-slate-400">(기본 미표기 · 지도·PNG 동일)</span>
+          </label>
+          <p className="text-[10px] text-slate-500 mt-1">
+            미표기여도 점에 마우스를 올리면 기관명·주소가 표시됩니다.
+          </p>
+        </div>
+
         {instTab === 'coord' ? <InstitutionUpload /> : <GeocodeUpload />}
       </section>
 

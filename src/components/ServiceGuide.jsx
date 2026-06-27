@@ -68,7 +68,7 @@ export default function ServiceGuide({ open, onClose }) {
               <li><b>④ 기관 위치 표시</b> — 두 가지 방식:
                 <ul className="list-disc ml-5 mt-0.5">
                   <li><b>좌표 직접(WGS84)</b>: 경도·위도가 이미 있는 엑셀 업로드.</li>
-                  <li><b>주소 지오코딩</b>: 주소만 있는 엑셀을 올리면 카카오 API로 좌표를 자동 변환해 표시.</li>
+                  <li><b>주소 지오코딩</b>: 주소만 있는 엑셀을 올리면 V-World·카카오 API로 좌표를 자동 변환해 표시.</li>
                 </ul>
               </li>
               <li><b>리셋</b>(우측 상단) — 모든 입력을 초기화.</li>
@@ -76,25 +76,30 @@ export default function ServiceGuide({ open, onClose }) {
             </ul>
           </section>
 
-          {/* 4. 카카오 API 안내 */}
+          {/* 4. 지오코딩 API 안내 */}
           <section className="bg-amber-50 border border-amber-200 rounded p-3">
-            <h3 className="font-bold text-amber-900 mb-1">카카오 API가 뭔가요? (주소 지오코딩용)</h3>
+            <h3 className="font-bold text-amber-900 mb-1">지오코딩 API가 뭔가요? (주소 지오코딩용)</h3>
             <p className="text-amber-900">
-              “주소 지오코딩” 기능은 주소를 지도 좌표로 바꾸기 위해 <b>카카오 개발자 API 키</b>(무료)를 사용합니다.
-              좌표를 이미 가지고 있다면 이 키 없이 “좌표 직접” 방식을 쓰면 됩니다.
+              “주소 지오코딩” 기능은 주소를 지도 좌표로 바꾸기 위해 <b>V-World</b>(국토교통부) 또는
+              <b> 카카오</b> API 키를 사용합니다. <b>둘 중 하나만 입력해도 동작</b>하며, 둘 다 입력하면
+              <b> V-World로 먼저 찾고 실패한 주소만 카카오로 재시도</b>합니다.
+              좌표를 이미 가지고 있다면 키 없이 “좌표 직접” 방식을 쓰면 됩니다.
             </p>
-            <ol className="list-decimal ml-5 mt-1.5 space-y-0.5 text-amber-900">
+            <ul className="list-disc ml-5 mt-1.5 space-y-0.5 text-amber-900">
               <li>
-                <a href="https://developers.kakao.com" target="_blank" rel="noreferrer"
-                   className="underline">developers.kakao.com</a> 로그인 → <b>내 애플리케이션 → 애플리케이션 추가하기</b>
+                <b>V-World 키</b>:{' '}
+                <a href="https://www.vworld.kr" target="_blank" rel="noreferrer" className="underline">vworld.kr</a>{' '}
+                로그인 → 오픈API → 인증키 발급(Geocoder 서비스 선택, 활용 도메인 등록)
               </li>
-              <li>앱의 <b>앱 키</b>에서 <b>REST API 키</b> 또는 <b>JavaScript 키</b> 복사</li>
-              <li>좌측 ④ “주소 지오코딩” 탭에서 방식을 고르고 해당 키를 붙여넣기</li>
-              <li><b>JavaScript 키 사용 시</b>: 카카오 콘솔 <b>플랫폼 → Web</b>에 현재 사이트 도메인 등록</li>
-            </ol>
+              <li>
+                <b>카카오 키</b>:{' '}
+                <a href="https://developers.kakao.com" target="_blank" rel="noreferrer" className="underline">developers.kakao.com</a>{' '}
+                로그인 → 내 애플리케이션 추가 → 앱 키의 <b>REST API 키</b> 복사
+              </li>
+            </ul>
             <p className="text-amber-800 mt-1.5 text-[13px]">
               ※ 입력한 키는 저장하지 않고 브라우저 메모리에만 사용합니다(새로고침 시 사라짐).
-              자세한 단계는 ④ “주소 지오코딩” 탭의 <b>키 발급 방법</b> 안내를 펼쳐 보세요.
+              자세한 단계는 ④ “주소 지오코딩” 탭의 <b>API 키 발급 방법</b> 안내를 펼쳐 보세요.
             </p>
           </section>
 
