@@ -121,12 +121,17 @@ function InstitutionLayer({ data, showLabels }) {
       const labelHtml = (showLabels && it.name)
         ? `<span class="inst-name">${escapeHtml(it.name)}</span>` : '';
       const html = `<span class="inst-x">✕</span>${labelHtml}`;
+      const hasInfo = !!(it.name || it.addr);
       const m = L.marker([it.lat, it.lng], {
         icon: L.divIcon({ className: 'inst-divicon', html, iconSize: [0, 0], iconAnchor: [0, 0] }),
-        interactive: !!it.name,
+        interactive: hasInfo,
         keyboard: false
       });
-      if (it.name) m.bindTooltip(it.name, { direction: 'top' });
+      if (hasInfo) {
+        const tipName = it.name ? `<b>${escapeHtml(it.name)}</b>` : '';
+        const tipAddr = it.addr ? `<div class="inst-tip-addr">${escapeHtml(it.addr)}</div>` : '';
+        m.bindTooltip(`${tipName}${tipAddr}`, { direction: 'top', className: 'inst-tip' });
+      }
       m.addTo(map);
       markers.push(m);
     });

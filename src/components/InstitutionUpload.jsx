@@ -3,7 +3,7 @@ import { useStore } from '../store.js';
 import { downloadInstitutionTemplate, parseInstitutionExcel } from '../utils/excelTemplate.js';
 
 export default function InstitutionUpload() {
-  const { institutions, setInstitutions, clearInstitutions, showInstLabels, setShowInstLabels } = useStore();
+  const { institutions, setInstitutions, clearInstitutions } = useStore();
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
 
@@ -42,16 +42,6 @@ export default function InstitutionUpload() {
       <label className="block w-full px-3 py-2 text-xs text-center border-2 border-dashed border-brand-500 bg-brand-50 text-brand-700 rounded cursor-pointer hover:bg-brand-100">
         ⬆ 기관 위치 엑셀 업로드 (.xlsx)
         <input type="file" accept=".xlsx,.xls" onChange={onFile} className="hidden" />
-      </label>
-
-      <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
-        <input
-          type="checkbox"
-          checked={showInstLabels}
-          onChange={(e) => setShowInstLabels(e.target.checked)}
-          className="accent-brand-500"
-        />
-        기관명 표시 (지도·PNG 동일 적용)
       </label>
 
       {error && (

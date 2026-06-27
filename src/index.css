@@ -47,7 +47,8 @@ html, body, #root {
   font-weight: bold;
   line-height: 1;
   text-shadow: 1px 1px 0 #fff, -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff;
-  pointer-events: none;
+  pointer-events: auto; /* ✕ 위에 마우스를 올리면 툴팁(기관명·주소) 표시 */
+  cursor: pointer;
 }
 .inst-name {
   position: absolute;
@@ -62,6 +63,13 @@ html, body, #root {
 }
 
 .leaflet-interactive:hover { filter: brightness(1.05); }
+
+/* 기관 마커 호버 툴팁(기관명·주소) */
+.inst-tip .inst-tip-addr {
+  font-size: 11px;
+  color: #475569;
+  margin-top: 2px;
+}
 
 /* 스크롤바 */
 .scroll-thin::-webkit-scrollbar { width: 6px; height: 6px; }
