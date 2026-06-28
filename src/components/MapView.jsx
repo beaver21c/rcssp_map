@@ -149,7 +149,9 @@ export default function MapView() {
     paletteName,
     classification,
     classCount,
-    showInstLabels
+    showInstLabels,
+    setShowInstLabels,
+    institutions
   } = useStore();
   const [codeTable, setCodeTable] = useState(null);
 
@@ -242,6 +244,21 @@ export default function MapView() {
       </MapContainer>
 
       <Legend />
+
+      {institutions.length > 0 && (
+        <div className="absolute top-3 right-3 z-[600] bg-white/95 border border-slate-200 rounded-lg shadow px-3 py-2">
+          <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={showInstLabels}
+              onChange={(e) => setShowInstLabels(e.target.checked)}
+              className="accent-brand-500"
+            />
+            기관명 표시
+          </label>
+          <p className="text-[10px] text-slate-400 mt-0.5">점에 마우스를 올리면 기관명·주소 표시</p>
+        </div>
+      )}
 
       {loading && (
         <div className="absolute inset-0 flex items-center justify-center bg-white/70 z-[500] pointer-events-none">
