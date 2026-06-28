@@ -5,7 +5,8 @@ import { PALETTES, CLASSIFICATIONS } from '../hooks/useColorScale.js';
 import DirectInput from './DirectInput.jsx';
 import ExcelUpload from './ExcelUpload.jsx';
 import ColorSettings from './ColorSettings.jsx';
-import InstitutionModal from './InstitutionModal.jsx';
+import InstitutionUpload from './InstitutionUpload.jsx';
+import GeocodeUpload from './GeocodeUpload.jsx';
 import { _bm } from '../utils/_meta.js';
 
 const VIEW_MODES = [
@@ -50,7 +51,7 @@ export default function ControlPanel() {
 
   const [codeTable, setCodeTable] = useState(null);
   const [activeTab, setActiveTab] = useState('excel');
-  const [instOpen, setInstOpen] = useState(false);
+  const [instTab, setInstTab] = useState('coord');
 
   // 초기 펼침 단계: 현재 진행 단계만 펼침
   const regionReady =
@@ -97,6 +98,8 @@ export default function ControlPanel() {
   const colorSummary =
     `${PALETTES[paletteName]?.label || paletteName} · ` +
     `${CLASSIFICATIONS.find((c) => c.id === classification)?.label || classification} ${classCount}단계`;
+
+  const instSummary = institutions.length > 0 ? `${institutions.length}건 표시중` : '미설정 (선택)';
 
   return (
     <div className="flex flex-col gap-2.5 p-4 overflow-y-auto scroll-thin h-full">
@@ -197,22 +200,39 @@ export default function ControlPanel() {
         </div>
       </Section>
 
-      {/* ④ 기관 위치 — 모달로 분리(좌측 패널 간결화) */}
-      <button
-        type="button"
-        onClick={() => setInstOpen(true)}
-        className="flex items-center justify-between gap-2 px-3 py-2.5 border border-slate-200 rounded-lg bg-white hover:bg-slate-50 text-left"
-      >
-        <div className="min-w-0">
-          <div className="text-sm font-bold text-slate-700">④ 기관 위치 표시 <span className="font-normal text-slate-400">(선택)</span></div>
-          <div className="text-[11px] text-slate-500 truncate mt-0.5">
-            {institutions.length > 0 ? `${institutions.length}건 표시중 · 클릭하여 수정` : '주소·좌표로 기관 점 추가하기'}
-          </div>
+      <Section id="inst" title="④ 기관 위치 표시 (선택)" summary={instSummary} open={openId === 'inst'} onToggle={toggle}>
+        <p className="text-[11px] text-slate-500 mb-2 mt-1">
+          코로플레스 없이 경계 + 기관 점만 출력도 가능. 기관명 라벨은 지도 우측 상단 “기관명 표시”로 켜고 끕니다.
+        </p>
+        <div className="flex gap-1 mb-2">
+          <button
+            onClick={() => setInstTab('coord')}
+            className={`flex-1 px-2 py-1.5 text-xs rounded border transition ${
+              instTab === 'coord'
+                ? 'border-brand-500 bg-brand-50 text-brand-700 font-medium'
+                : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            좌표 직접 (WGS84)
+          </button>
+          <button
+            onClick={() => setInstTab('geocode')}
+            className={`flex-1 px-2 py-1.5 text-xs rounded border transition ${
+              instTab === 'geocode'
+                ? 'border-brand-500 bg-brand-50 text-brand-700 font-medium'
+                : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            주소 지오코딩
+          </button>
         </div>
-        <span className="text-brand-500 text-lg flex-shrink-0">＋</span>
-      </button>
-
-      <InstitutionModal open={instOpen} onClose={() => setInstOpen(false)} />
+        <p className="text-[11px] text-slate-500 mb-2">
+          {instTab === 'coord'
+            ? '경도·위도 좌표가 이미 있는 경우.'
+            : '주소만 있으면 V-World·카카오 API로 좌표 자동변환.'}
+        </p>
+        {instTab === 'coord' ? <InstitutionUpload /> : <GeocodeUpload />}
+      </Section>
 
       <div style={{ flex: 1 }} aria-hidden="true" />
       <div
