@@ -12,7 +12,7 @@ const INST_COLOR = '#374151';   // 기관 ✕ 색
 
 export default function ExportButton() {
   const {
-    viewMode, selectedSido, selectedSgg, values,
+    viewMode, selectedSido, selectedSgg, mergeGu, values,
     paletteName, classification, classCount,
     institutions, showInstLabels
   } = useStore();
@@ -277,7 +277,9 @@ export default function ExportButton() {
       // 5) 제목/범례/워터마크
       const ver = await loadDataVersion().catch(() => null);
       const ct = await loadCodeTable().catch(() => null);
-      let regionLabel = '전국';
+      let regionLabel = viewMode === 'sgg'
+        ? (mergeGu ? '전국 (기초자치단체 기준)' : '전국 (일반구 분리 기준)')
+        : '전국';
       if (selectedSgg && ct) {
         const sd = ct.sido.find((x) => x.code === selectedSido);
         if (selectedSgg.startsWith('CITY_')) {

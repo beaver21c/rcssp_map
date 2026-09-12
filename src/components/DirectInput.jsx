@@ -7,7 +7,7 @@ import { getTargetCodes } from '../utils/codeTable.js';
  * 직접 입력 탭 - 현재 보기 모드의 지역 목록을 테이블로 표시, 값 입력
  */
 export default function DirectInput() {
-  const { viewMode, selectedSido, selectedSgg, values, updateValue, clearValues } =
+  const { viewMode, selectedSido, selectedSgg, mergeGu, values, updateValue, clearValues } =
     useStore();
   const [codeTable, setCodeTable] = useState(null);
   const [filter, setFilter] = useState('');
@@ -20,7 +20,7 @@ export default function DirectInput() {
     return <div className="p-3 text-xs text-slate-500">로딩 중...</div>;
   }
 
-  const targets = getTargetCodes(codeTable, viewMode, selectedSido, selectedSgg);
+  const targets = getTargetCodes(codeTable, viewMode, selectedSido, selectedSgg, mergeGu);
   const filtered = filter
     ? targets.filter((t) =>
         t.name.includes(filter) || t.code.includes(filter)

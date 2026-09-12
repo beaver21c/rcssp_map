@@ -2,6 +2,9 @@ import { create } from 'zustand';
 
 const DEFAULTS = {
   viewMode: 'sgg',
+  // 전국 → 시군구 비교에서 일반구를 시(기초자치단체)로 묶을지.
+  // 지역사회보장계획 수립 단위가 기초자치단체이므로 기본값은 통합(229개)이다.
+  mergeGu: true,
   selectedSido: '',
   selectedSgg: '',
   values: {},
@@ -21,6 +24,8 @@ export const useStore = create((set) => ({
     selectedSgg: '',
     values: {}
   }),
+  // 기준이 바뀌면 코드 체계가 달라지므로 입력값을 비운다(잘못 남은 값이 지도에 칠해지는 것 방지)
+  setMergeGu: (b) => set({ mergeGu: !!b, values: {} }),
   setSelectedSido: (cd) => set({ selectedSido: cd, selectedSgg: '' }),
   setSelectedSgg: (cd) => set({ selectedSgg: cd }),
 

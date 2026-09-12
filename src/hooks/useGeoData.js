@@ -18,10 +18,13 @@ function fetchData(url) {
 /**
  * TopoJSON 동적 로딩 + 캐싱 hook
  */
+// url → { geo, topo, key }
+// 원본 TopoJSON(topo)도 함께 들고 있는다. 일반구를 시 단위로 녹이려면(topojson.merge)
+// 피처가 아니라 호(arc) 정보를 가진 원본이 필요하다.
 const cache = new Map();
 
 export function useGeoData(url, objectKey = null) {
-  const [data, setData] = useState(() => cache.get(url) || null);
+  const [entry, setEntry] = useState(() => cache.get(url) || null);
   const [loading, setLoading] = useState(!cache.has(url));
   const [error, setError] = useState(null);
 
@@ -29,7 +32,7 @@ export function useGeoData(url, objectKey = null) {
     if (!url) return;
 
     if (cache.has(url)) {
-      setData(cache.get(url));
+      setEntry(cache.get(url));
       setLoading(false);
       return;
     }
@@ -43,8 +46,9 @@ export function useGeoData(url, objectKey = null) {
         if (cancelled) return;
         const key = objectKey || Object.keys(topo.objects)[0];
         const geo = topojson.feature(topo, topo.objects[key]);
-        cache.set(url, geo);
-        setData(geo);
+        const e = { geo, topo, key };
+        cache.set(url, e);
+        setEntry(e);
       })
       .catch((e) => {
         if (cancelled) return;
@@ -60,7 +64,7 @@ export function useGeoData(url, objectKey = null) {
     };
   }, [url, objectKey]);
 
-  return { data, loading, error };
+  return { data: entry?.geo || null, topo: entry?.topo || null, objectKey: entry?.key || null, loading, error };
 }
 
 let codeTablePromise = null;

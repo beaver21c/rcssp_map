@@ -1,14 +1,16 @@
 import * as XLSX from 'xlsx';
-import { getTargetCodes } from './codeTable.js';
+import { getTargetCodes, buildCityIndex, matchByName } from './codeTable.js';
 
-function buildGuideRows(viewMode, totalCount) {
+function buildGuideRows(viewMode, totalCount, mergeGu) {
   const modeLabel = {
     sgg: '전국 → 시군구 비교',
     sido_emd: '시도 선택 → 읍면동',
     sgg_emd: '시군구 선택 → 읍면동'
   }[viewMode] || '';
   const colInfo = viewMode === 'sgg'
-    ? '지역코드(5자리) | 시도 | 시군구 | 값'
+    ? (mergeGu
+      ? '지역코드(일반구 통합 시는 CITY_ 코드, 그 외 5자리) | 시도 | 시군구 | 값'
+      : '지역코드(5자리) | 시도 | 시군구 | 값')
     : '지역코드(8자리) | 시도 | 시군구 | 읍면동 | 값';
   const codeLen = viewMode === 'sgg' ? '5자리' : '8자리';
   return [
@@ -43,6 +45,17 @@ function buildGuideRows(viewMode, totalCount) {
     ['【일반구 통합 안내】'],
     ['용인시·성남시·수원시 등 일반구 보유 시는 시군구 드롭다운에서'],
     ['"○○시 (전체 N개 구)" 옵션 선택 시 모든 일반구 읍면동을 한번에 출력함.'],
+    ...(viewMode === 'sgg' && mergeGu
+      ? [
+        [''],
+        ['【이 양식의 기준 — 기초자치단체(일반구 통합)】'],
+        ['1. 지역사회보장계획 수립 단위(시·군·자치구)에 맞춘 목록임.'],
+        ['2. 일반구를 둔 시(용인시 등)는 구를 나누지 않고 시 한 줄로 들어 있음.'],
+        ['3. 그 시의 지역코드는 CITY_로 시작하는 코드이며 그대로 두어야 매칭됨.'],
+        ['4. 구 단위 코드(5자리)로 올려도 해당 시의 값으로 인식함(같은 시에 값이 여러 개면 첫 값 사용).'],
+        ['5. 구 단위로 나누어 보려면 화면 좌측 "일반구를 시 단위로 통합"을 끄고 양식을 다시 받을 것.']
+      ]
+      : []),
     [''],
     [''],
     [`총 ${totalCount}개 지역 (${new Date().toISOString().slice(0,10)} 기준)`],
@@ -50,8 +63,8 @@ function buildGuideRows(viewMode, totalCount) {
   ];
 }
 
-export function downloadTemplate(codeTable, viewMode, selectedSido, selectedSgg) {
-  const targets = getTargetCodes(codeTable, viewMode, selectedSido, selectedSgg);
+export function downloadTemplate(codeTable, viewMode, selectedSido, selectedSgg, mergeGu = false) {
+  const targets = getTargetCodes(codeTable, viewMode, selectedSido, selectedSgg, mergeGu);
   if (targets.length === 0) {
     alert('지역을 먼저 선택하시오.');
     return;
@@ -62,9 +75,19 @@ export function downloadTemplate(codeTable, viewMode, selectedSido, selectedSgg)
 
   if (viewMode === 'sgg') {
     header = ['지역코드', '시도', '시군구', '값'];
+    // 기초자치단체 기준이면 일반구를 시 한 줄로 묶는다(코드는 CITY_ 가상 코드)
+    const { byGu } = buildCityIndex(codeTable);
+    const seenCity = new Set();
     for (const sido of codeTable.sido) {
       for (const sgg of codeTable.sgg[sido.code] || []) {
-        rows.push([sgg.code, sido.name, sgg.name, '']);
+        const city = mergeGu ? byGu.get(sgg.code) : null;
+        if (city) {
+          if (seenCity.has(city.virtual_code)) continue;
+          seenCity.add(city.virtual_code);
+          rows.push([city.virtual_code, sido.name, city.name, '']);
+        } else {
+          rows.push([sgg.code, sido.name, sgg.name, '']);
+        }
       }
     }
   } else if (viewMode === 'sido_emd') {
@@ -108,7 +131,7 @@ export function downloadTemplate(codeTable, viewMode, selectedSido, selectedSgg)
     }
   }
 
-  const guideRows = buildGuideRows(viewMode, rows.length);
+  const guideRows = buildGuideRows(viewMode, rows.length, mergeGu);
   const wsGuide = XLSX.utils.aoa_to_sheet(guideRows);
   wsGuide['!cols'] = [{ wch: 70 }];
 
@@ -116,15 +139,22 @@ export function downloadTemplate(codeTable, viewMode, selectedSido, selectedSgg)
   XLSX.utils.book_append_sheet(wb, ws, '입력양식');
   XLSX.utils.book_append_sheet(wb, wsGuide, '사용방법');
 
-  // 파일명에 city 가상코드 처리
+  // 파일명에 city 가상코드 처리 + 전국 모드는 기준(기초자치단체/일반구 분리) 표기
   const sggLabel = selectedSgg.startsWith('CITY_')
     ? selectedSgg.replace('CITY_', 'city_')
     : selectedSgg || '';
-  const filename = `template_${viewMode}_${sggLabel || selectedSido || 'all'}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+  const basis = viewMode === 'sgg' ? (mergeGu ? 'city' : 'gu') : '';
+  const region = [sggLabel || selectedSido || 'all', basis].filter(Boolean).join('_');
+  const filename = `template_${viewMode}_${region}_${new Date().toISOString().slice(0, 10)}.xlsx`;
   XLSX.writeFile(wb, filename);
 }
 
-export function parseExcel(file, codeTable) {
+/**
+ * 값 엑셀 파싱
+ * @param {object} opts - { mergeGu } 전국 모드에서 기초자치단체 기준이면 일반구 값을 시로 옮김
+ */
+export function parseExcel(file, codeTable, opts = {}) {
+  const mergeGu = !!opts.mergeGu;
   return new Promise((resolve, reject) => {
     const name = (file.name || '').toLowerCase();
     if (!name.endsWith('.xlsx') && !name.endsWith('.xls')) {
@@ -172,10 +202,15 @@ export function parseExcel(file, codeTable) {
         const matched = {};
         const failed = [];
 
+        const { byGu } = buildCityIndex(codeTable);
+
         const allCodes = new Set();
         codeTable.sido.forEach((s) => allCodes.add(s.code));
         Object.values(codeTable.sgg).flat().forEach((s) => allCodes.add(s.code));
         Object.values(codeTable.emd).flat().forEach((e) => allCodes.add(e.code));
+        // 일반구 통합 시의 가상 코드(CITY_xx_yyy)도 유효한 지역코드로 본다
+        Object.values(codeTable.merged_cities || {}).flat()
+          .forEach((c) => allCodes.add(c.virtual_code));
 
         const adm2to1 = new Map();
         Object.values(codeTable.emd).flat().forEach((e) => {
@@ -205,6 +240,23 @@ export function parseExcel(file, codeTable) {
           let matchCode = null;
           if (allCodes.has(rawCode)) matchCode = rawCode;
           else if (adm2to1.has(rawCode)) matchCode = adm2to1.get(rawCode);
+          // 코드 칸에 지역명을 적은 경우(예: 용인시)도 받아 준다
+          else if (!/^\d+$/.test(rawCode)) matchCode = matchByName(rawCode, codeTable);
+
+          // 기초자치단체 기준 화면에서는 일반구 코드로 온 값을 그 시의 값으로 옮긴다
+          if (matchCode && mergeGu) {
+            const city = byGu.get(matchCode);
+            if (city) {
+              if (matched[city.virtual_code] !== undefined && matched[city.virtual_code] !== v) {
+                failed.push({
+                  row: i + 1, code: rawCode,
+                  reason: `${city.name}에 일반구 값이 여러 개 — 먼저 나온 값 사용`
+                });
+                continue;
+              }
+              matchCode = city.virtual_code;
+            }
+          }
 
           if (matchCode) matched[matchCode] = v;
           else failed.push({ row: i + 1, code: rawCode, reason: '코드 미매칭' });

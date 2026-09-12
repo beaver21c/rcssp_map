@@ -4,7 +4,7 @@ import { loadCodeTable } from '../hooks/useGeoData.js';
 import { downloadTemplate, parseExcel } from '../utils/excelTemplate.js';
 
 export default function ExcelUpload() {
-  const { viewMode, selectedSido, selectedSgg, setValues, clearValues } = useStore();
+  const { viewMode, selectedSido, selectedSgg, mergeGu, setValues, clearValues } = useStore();
   const [codeTable, setCodeTable] = useState(null);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
@@ -21,7 +21,7 @@ export default function ExcelUpload() {
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      const r = await parseExcel(file, codeTable);
+      const r = await parseExcel(file, codeTable, { mergeGu: viewMode === 'sgg' && mergeGu });
       setResult(r);
       setValues(r.matched);
     } catch (err) {
@@ -34,7 +34,7 @@ export default function ExcelUpload() {
 
   const onDownload = () => {
     try {
-      downloadTemplate(codeTable, viewMode, selectedSido, selectedSgg);
+      downloadTemplate(codeTable, viewMode, selectedSido, selectedSgg, mergeGu);
     } catch (err) {
       setError(err.message);
     }

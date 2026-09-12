@@ -5,6 +5,8 @@ import { useGeoData, loadCodeTable } from '../hooks/useGeoData.js';
 import { useColorScale } from '../hooks/useColorScale.js';
 import { baseStyle, hoverStyle, extractCode, extractName } from '../utils/mapStyles.js';
 import { filterInstitutions } from '../utils/geoUtils.js';
+import { buildCityIndex } from '../utils/codeTable.js';
+import { mergeGuGeometries } from '../utils/mergeCities.js';
 import { useStore } from '../store.js';
 import Legend from './Legend.jsx';
 
@@ -145,6 +147,7 @@ export default function MapView() {
     viewMode,
     selectedSido,
     selectedSgg,
+    mergeGu,
     values,
     paletteName,
     classification,
@@ -163,7 +166,12 @@ export default function MapView() {
     () => resolveDataUrl(viewMode, selectedSido),
     [viewMode, selectedSido]
   );
-  const { data, loading, error } = useGeoData(url);
+  const { data, topo, objectKey, loading, error } = useGeoData(url);
+
+  const cityIndex = useMemo(
+    () => (codeTable ? buildCityIndex(codeTable) : null),
+    [codeTable]
+  );
 
   const mergedCity = useMemo(() => {
     if (!selectedSgg.startsWith('CITY_') || !codeTable) return null;
@@ -171,17 +179,31 @@ export default function MapView() {
     return list.find((c) => c.virtual_code === selectedSgg) || null;
   }, [selectedSgg, selectedSido, codeTable]);
 
+  /* 전국 모드에서 일반구를 시(기초자치단체)로 녹인 경계.
+     실패하면 원본(255개)으로 물러나 지도가 비지 않게 한다. */
+  const mergedNation = useMemo(() => {
+    if (viewMode !== 'sgg' || !mergeGu || !topo || !cityIndex || cityIndex.byGu.size === 0) return null;
+    try {
+      return mergeGuGeometries(topo, objectKey, cityIndex);
+    } catch (e) {
+      console.error('[일반구 통합] 경계 병합 실패, 원본 사용:', e);
+      return null;
+    }
+  }, [viewMode, mergeGu, topo, objectKey, cityIndex]);
+
+  const source = mergedNation || data;
+
   const filtered = useMemo(() => {
-    if (!data) return null;
+    if (!source) return null;
     return {
-      ...data,
-      features: filterFeatures(data.features, viewMode, selectedSgg, mergedCity)
+      ...source,
+      features: filterFeatures(source.features, viewMode, selectedSgg, mergedCity)
     };
-  }, [data, viewMode, selectedSgg, mergedCity]);
+  }, [source, viewMode, selectedSgg, mergedCity]);
 
   const { getColor } = useColorScale(values, paletteName, classification, classCount);
 
-  const layerKey = `${viewMode}-${selectedSido}-${selectedSgg}`;
+  const layerKey = `${viewMode}-${selectedSido}-${selectedSgg}-${mergedNation ? 'city' : 'gu'}`;
   const colorKey = `${Object.keys(values).length}-${paletteName}-${classification}-${classCount}`;
 
   return (
@@ -214,9 +236,13 @@ export default function MapView() {
               const code = extractCode(feature.properties);
               const v = values[code];
               const valStr = v !== undefined && v !== '' ? v : '미입력';
+              const guCount = feature.properties?.merged_gu?.length || 0;
+              const mergedNote = guCount > 0 ? `<div style="color:#b45309">일반구 ${guCount}개 통합</div>` : '';
 
               layer.bindTooltip(
-                `<div style="font-size:12px"><b>${name}</b><br/>코드: ${code}<br/>값: ${valStr}</div>`,
+                `<div style="font-size:12px"><b>${name}</b>${
+                  guCount > 0 ? ` <span style="color:#b45309">(구 ${guCount}개 통합)</span>` : ''
+                }<br/>코드: ${code}<br/>값: ${valStr}</div>`,
                 { sticky: true, direction: 'top' }
               );
 
@@ -224,6 +250,7 @@ export default function MapView() {
                 `<div style="font-size:13px;line-height:1.5">
                   <div style="font-weight:bold;font-size:14px;margin-bottom:4px">${name}</div>
                   <div style="color:#64748b">지역코드: ${code}</div>
+                  ${mergedNote}
                   <div style="color:#1e293b;margin-top:4px">값: <b>${valStr}</b></div>
                 </div>`
               );

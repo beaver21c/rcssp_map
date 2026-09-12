@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useStore } from '../store.js';
 import { loadCodeTable } from '../hooks/useGeoData.js';
 import { PALETTES, CLASSIFICATIONS } from '../hooks/useColorScale.js';
+import { buildCityIndex } from '../utils/codeTable.js';
 import DirectInput from './DirectInput.jsx';
 import ExcelUpload from './ExcelUpload.jsx';
 import ColorSettings from './ColorSettings.jsx';
@@ -44,8 +45,8 @@ function Section({ id, title, summary, open, onToggle, children }) {
 
 export default function ControlPanel() {
   const {
-    viewMode, selectedSido, selectedSgg,
-    setViewMode, setSelectedSido, setSelectedSgg,
+    viewMode, selectedSido, selectedSgg, mergeGu,
+    setViewMode, setSelectedSido, setSelectedSgg, setMergeGu,
     values, paletteName, classification, classCount, institutions
   } = useStore();
 
@@ -74,6 +75,11 @@ export default function ControlPanel() {
   const sggList = selectedSido ? codeTable.sgg[selectedSido] || [] : [];
   const mergedCities = selectedSido ? codeTable.merged_cities?.[selectedSido] || [] : [];
 
+  // 전국 모드 기준 개수: 기초자치단체(일반구 통합) vs 일반구 분리
+  const nGuTotal = Object.values(codeTable.sgg).flat().length;
+  const { byGu, cities } = buildCityIndex(codeTable);
+  const nCityTotal = nGuTotal - byGu.size + cities.length;
+
   // ---- 요약 문자열 ----
   const sidoName = (cd) => codeTable.sido.find((s) => s.code === cd)?.name || '';
   const sggName = (sidoCd, sggCd) => {
@@ -84,7 +90,11 @@ export default function ControlPanel() {
   };
   const modeLabel = VIEW_MODES.find((m) => m.id === viewMode)?.label || '';
   let regionPart = '';
-  if (viewMode === 'sido_emd') regionPart = selectedSido ? sidoName(selectedSido) : '시도 미선택';
+  if (viewMode === 'sgg') {
+    regionPart = mergeGu
+      ? `기초자치단체 ${nCityTotal}개`
+      : `일반구 분리 ${nGuTotal}개`;
+  } else if (viewMode === 'sido_emd') regionPart = selectedSido ? sidoName(selectedSido) : '시도 미선택';
   else if (viewMode === 'sgg_emd') {
     regionPart = selectedSido
       ? `${sidoName(selectedSido)}${selectedSgg ? ' · ' + sggName(selectedSido, selectedSgg) : ' · 시군구 미선택'}`
@@ -125,6 +135,29 @@ export default function ControlPanel() {
             </label>
           ))}
         </div>
+
+        {viewMode === 'sgg' && cities.length > 0 && (
+          <div className="mt-3 px-3 py-2 rounded border border-slate-200 bg-slate-50">
+            <label className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={mergeGu}
+                onChange={(e) => setMergeGu(e.target.checked)}
+                className="accent-brand-500 mt-0.5"
+              />
+              <span>
+                <b>일반구를 시 단위로 통합</b> (기초자치단체 {nCityTotal}개 기준)
+                <span className="block text-slate-500 mt-0.5">
+                  용인시·수원시처럼 일반구를 둔 {cities.length}개 시를 하나로 묶음. 끄면 일반구를 나눈 {nGuTotal}개 기준.
+                  지역사회보장계획은 기초자치단체가 세우므로 통합이 기본값임.
+                </span>
+              </span>
+            </label>
+            <p className="text-[11px] text-amber-700 mt-1.5">
+              ⓘ 기준을 바꾸면 지역코드 체계가 달라져 입력값이 초기화됨. 엑셀 양식도 다시 내려받을 것.
+            </p>
+          </div>
+        )}
 
         {(viewMode === 'sido_emd' || viewMode === 'sgg_emd') && (
           <div className="mt-3">
