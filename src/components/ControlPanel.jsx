@@ -21,10 +21,18 @@ const TABS = [
   { id: 'direct', label: '직접 입력' }
 ];
 
-/** 접이식 섹션: 접혔을 때 현재 선택 요약을 헤더에 표시 */
+/**
+ * 접이식 섹션: 접혔을 때 현재 선택 요약을 헤더에 표시
+ *
+ * 루트의 flex-shrink-0 은 필수이므로 지우지 말 것.
+ * 이 section 은 패널 루트(아래 115행: flex flex-col + overflow-y-auto + h-full)의 직접 자식인데
+ * overflow-hidden 때문에 min-height:auto 가 0 으로 계산된다. 축소를 막지 않으면
+ * 화면이 낮을 때 섹션이 눌려서 ① 내용 아래쪽이 잘리고(버튼을 누를 수 없음)
+ * ② 패널이 넘치지 않게 되어 세로 스크롤바도 생기지 않는다.
+ */
 function Section({ id, title, summary, open, onToggle, children }) {
   return (
-    <section className="border border-slate-200 rounded-lg overflow-hidden bg-white">
+    <section className="border border-slate-200 rounded-lg overflow-hidden flex-shrink-0 bg-white">
       <button
         type="button"
         onClick={() => onToggle(id)}
