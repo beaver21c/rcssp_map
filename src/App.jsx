@@ -48,7 +48,10 @@ export default function App() {
 
       <ServiceGuide open={guideOpen} onClose={() => setGuideOpen(false)} />
 
-      <main className="flex flex-1 overflow-hidden relative">
+      {/* min-h: 머리말·진행단계줄·각주는 줄바꿈으로 커지기만 할 뿐 줄어들지 않는다.
+          화면이 낮거나 좁을 때 이들이 지도·좌측 패널 높이를 0까지 잠식하는 것을 막고,
+          그래도 모자라면 페이지가 스크롤되게 둔다(잘라내지 않음) */}
+      <main className="flex flex-1 overflow-hidden relative min-h-[320px]">
         <aside
           className={`bg-white border-r border-slate-200 flex-shrink-0 transition-transform duration-200 z-[700]
             md:static md:w-80 md:translate-x-0

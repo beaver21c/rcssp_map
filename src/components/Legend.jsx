@@ -23,7 +23,9 @@ export default function Legend() {
   };
 
   return (
-    <div className="absolute right-3 bottom-3 z-[600] bg-white border border-slate-400 rounded-md shadow-md px-3 py-2 text-xs">
+    // max-h: 범례는 바닥에 붙어 위로 자라므로, 구분 단계를 많이 두면 지도가 낮을 때
+    //        윗 구간부터 지도 밖으로 나가 보이지 않았음. 높이를 지도 안으로 제한하고 자체 스크롤을 줌
+    <div className="absolute right-3 bottom-3 z-[600] bg-white border border-slate-400 rounded-md shadow-md px-3 py-2 text-xs max-h-[calc(100%-1.5rem)] overflow-y-auto scroll-thin">
       <div className="font-medium text-slate-700 mb-1.5">범례</div>
       <div className="flex flex-col gap-0.5">
         {hasChoro && colors.map((c, i) => (
